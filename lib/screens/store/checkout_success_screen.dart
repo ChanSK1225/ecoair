@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../models/product.dart';
 
 class CheckoutSuccessScreen extends StatelessWidget {
-  const CheckoutSuccessScreen({super.key});
+  final StoreOrder order;
+
+  const CheckoutSuccessScreen({super.key, required this.order});
 
   @override
   Widget build(BuildContext context) {
@@ -15,8 +19,8 @@ class CheckoutSuccessScreen extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDCFCE7),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFDCFCE7),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -28,18 +32,37 @@ class CheckoutSuccessScreen extends StatelessWidget {
               const SizedBox(height: 32),
               const Text(
                 'Payment Successful!',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               const Text(
-                'Your order has been placed successfully. You will receive a confirmation email shortly.',
+                'Your protection order has been placed successfully.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 16,
+                style: TextStyle(color: Colors.grey, fontSize: 16),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8F9FA),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    _buildRow('Order ID', order.id),
+                    const SizedBox(height: 8),
+                    _buildRow('Items', '${order.itemCount}'),
+                    const SizedBox(height: 8),
+                    _buildRow('Total', 'RM ${order.total.toStringAsFixed(2)}'),
+                    const SizedBox(height: 8),
+                    _buildRow(
+                      'Date',
+                      DateFormat(
+                        'dd MMM yyyy, hh:mm a',
+                      ).format(order.createdAt),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 48),
@@ -57,16 +80,29 @@ class CheckoutSuccessScreen extends StatelessWidget {
                 ),
                 child: const Text(
                   'Back to Store',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.grey)),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
     );
   }
 }

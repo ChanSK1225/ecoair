@@ -30,13 +30,7 @@ class AQIGauge extends StatelessWidget {
               color: Color(0xFF333333),
             ),
           ),
-          const Text(
-            'AQI',
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey,
-            ),
-          ),
+          const Text('AQI', style: TextStyle(fontSize: 18, color: Colors.grey)),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -46,10 +40,7 @@ class AQIGauge extends StatelessWidget {
             ),
             child: Text(
               status,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(color: color, fontWeight: FontWeight.bold),
             ),
           ),
         ],

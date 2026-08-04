@@ -34,9 +34,7 @@ class MyApp extends StatelessWidget {
             primary: const Color(0xFF0F9D58),
             secondary: const Color(0xFF0F9D58),
           ),
-          textTheme: GoogleFonts.interTextTheme(
-            Theme.of(context).textTheme,
-          ),
+          textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
           useMaterial3: true,
           scaffoldBackgroundColor: const Color(0xFFF8F9FA),
         ),
@@ -52,7 +50,7 @@ class AuthWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
-    
+
     if (authProvider.isAuthenticated) {
       return const MainLayout();
     } else {

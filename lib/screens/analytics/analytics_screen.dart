@@ -1,5 +1,11 @@
-import 'package:flutter/material.dart';
+import 'dart:math';
+
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../../models/city.dart';
+import '../../providers/weather_provider.dart';
 import '../reports/report_export_screen.dart';
 
 class AnalyticsScreen extends StatelessWidget {
@@ -7,13 +13,31 @@ class AnalyticsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final weatherProvider = Provider.of<WeatherProvider>(context);
+    final readings = _analyticsReadings(weatherProvider);
+    final averageAqi = _averageAqi(readings);
+    final maxAqi = readings.isEmpty
+        ? 0
+        : readings.map((city) => city.aqi).reduce(max);
+    final goodCount = readings.where((city) => city.aqi <= 50).length;
+    final unhealthyCount = readings.where((city) => city.aqi > 100).length;
+    final updated = weatherProvider.lastUpdated;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Analytics', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text('Air quality trends & insights', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const Text(
+              'Analytics',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              updated == null
+                  ? 'APIMS station insights'
+                  : 'Updated ${DateFormat('dd MMM, hh:mm a').format(updated)}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
           ],
         ),
         actions: [
@@ -23,7 +47,9 @@ class AnalyticsScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const ReportExportScreen()),
+                  MaterialPageRoute(
+                    builder: (context) => const ReportExportScreen(),
+                  ),
                 );
               },
               icon: const Icon(Icons.download, size: 16),
@@ -31,134 +57,255 @@ class AnalyticsScreen extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.black,
                 side: BorderSide(color: Colors.grey[300]!),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
               ),
             ),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top Stats
-            Row(
-              children: [
-                Expanded(child: _buildStatCard('Avg AQI', '72', '-8%', Colors.green)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildStatCard('Max AQI', '185', '+12%', Colors.red)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildStatCard('Good Days', '18', '+3', Colors.green)),
-              ],
-            ),
-            const SizedBox(height: 24),
-            
-            // AQI Trend Chart
-            _buildChartContainer(
-              title: 'AQI Trend',
-              child: SizedBox(
-                height: 200,
-                child: LineChart(
-                  LineChartData(
-                    gridData: const FlGridData(show: true, drawVerticalLine: false),
-                    titlesData: FlTitlesData(
-                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          getTitlesWidget: (value, meta) {
-                            const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                            if (value >= 0 && value < days.length) {
-                              return Text(days[value.toInt()], style: const TextStyle(fontSize: 10, color: Colors.grey));
-                            }
-                            return const Text('');
-                          },
+      body: RefreshIndicator(
+        onRefresh: () => weatherProvider.refreshData(),
+        child: readings.isEmpty
+            ? ListView(
+                padding: const EdgeInsets.all(24),
+                children: [_buildEmptyState()],
+              )
+            : SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildStatCard(
+                            'Avg AQI',
+                            '$averageAqi',
+                            '${readings.length} stations',
+                            _aqiColor(averageAqi),
+                            Icons.analytics_outlined,
+                          ),
                         ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildStatCard(
+                            'Max AQI',
+                            '$maxAqi',
+                            unhealthyCount > 0
+                                ? '$unhealthyCount unhealthy'
+                                : 'No unhealthy',
+                            _aqiColor(maxAqi),
+                            Icons.warning_amber_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildStatCard(
+                            'Good Areas',
+                            '$goodCount',
+                            'AQI 0-50',
+                            Colors.green,
+                            Icons.eco_outlined,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    _buildChartContainer(
+                      title: 'AQI Spread by Station',
+                      trailing: const Text(
+                        'Live station order',
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                      child: SizedBox(
+                        height: 220,
+                        child: LineChart(_buildLineChart(readings)),
                       ),
                     ),
-                    borderData: FlBorderData(show: false),
-                    lineBarsData: [
-                      LineChartBarData(
-                        spots: const [
-                          FlSpot(0, 68), FlSpot(1, 75), FlSpot(2, 85), FlSpot(3, 65),
-                          FlSpot(4, 72), FlSpot(5, 58), FlSpot(6, 70),
-                        ],
-                        isCurved: true,
-                        color: const Color(0xFF0F9D58),
-                        barWidth: 3,
-                        dotData: const FlDotData(show: false),
-                        belowBarData: BarAreaData(
-                          show: true,
-                          color: const Color(0xFF0F9D58).withValues(alpha: 0.1),
-                        ),
+                    const SizedBox(height: 24),
+                    _buildChartContainer(
+                      title: 'City Comparison',
+                      trailing: const Text(
+                        'Today',
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            
-            // City Comparison
-            _buildChartContainer(
-              title: 'City Comparison (Today)',
-              child: SizedBox(
-                height: 200,
-                child: BarChart(
-                  BarChartData(
-                    gridData: const FlGridData(show: false),
-                    titlesData: FlTitlesData(
-                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          getTitlesWidget: (value, meta) {
-                            const cities = ['KL', 'Penang', 'JB', 'Kuching', 'KK', 'Shah Alam'];
-                            if (value >= 0 && value < cities.length) {
-                              return Text(cities[value.toInt()], style: const TextStyle(fontSize: 8, color: Colors.grey));
-                            }
-                            return const Text('');
-                          },
-                        ),
+                      child: SizedBox(
+                        height: 230,
+                        child: BarChart(_buildBarChart(readings)),
                       ),
                     ),
-                    borderData: FlBorderData(show: false),
-                    barGroups: [
-                      _buildBarGroup(0, 72),
-                      _buildBarGroup(1, 45),
-                      _buildBarGroup(2, 89),
-                      _buildBarGroup(3, 155),
-                      _buildBarGroup(4, 38),
-                      _buildBarGroup(5, 112),
-                    ],
-                  ),
+                    const SizedBox(height: 24),
+                    _buildChartContainer(
+                      title: 'Pollutant Breakdown',
+                      child: Column(
+                        children: _pollutantBreakdown(readings).entries
+                            .map(
+                              (entry) => _buildPollutantRow(
+                                entry.key,
+                                entry.value,
+                                _pollutantColor(entry.key),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildInsightCard(readings, averageAqi, maxAqi),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            
-            // Pollutant Breakdown
-            _buildChartContainer(
-              title: 'Pollutant Breakdown',
-              child: Column(
-                children: [
-                  _buildPollutantRow('PM2.5', 45, Colors.orange),
-                  _buildPollutantRow('PM10', 32, Colors.yellow[700]!),
-                  _buildPollutantRow('O3', 28, Colors.yellow[700]!),
-                  _buildPollutantRow('NO2', 18, Colors.green),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
 
-  Widget _buildStatCard(String title, String value, String change, Color changeColor) {
+  List<City> _analyticsReadings(WeatherProvider provider) {
+    if (provider.apimsReadings.isNotEmpty) return provider.apimsReadings;
+    return provider.favoriteCities;
+  }
+
+  int _averageAqi(List<City> readings) {
+    if (readings.isEmpty) return 0;
+    final total = readings.fold<int>(0, (sum, city) => sum + city.aqi);
+    return (total / readings.length).round();
+  }
+
+  LineChartData _buildLineChart(List<City> readings) {
+    final maxY = readings.map((city) => city.aqi).reduce(max).toDouble() + 40;
+
+    return LineChartData(
+      minY: 0,
+      maxY: max(120, maxY),
+      gridData: const FlGridData(show: true, drawVerticalLine: false),
+      titlesData: FlTitlesData(
+        rightTitles: const AxisTitles(
+          sideTitles: SideTitles(showTitles: false),
+        ),
+        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        leftTitles: const AxisTitles(
+          sideTitles: SideTitles(showTitles: true, reservedSize: 34),
+        ),
+        bottomTitles: AxisTitles(
+          sideTitles: SideTitles(
+            showTitles: true,
+            reservedSize: 32,
+            getTitlesWidget: (value, meta) {
+              final index = value.toInt();
+              if (index < 0 || index >= readings.length) {
+                return const SizedBox.shrink();
+              }
+              return Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  _shortName(readings[index].name),
+                  style: const TextStyle(fontSize: 9, color: Colors.grey),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+      borderData: FlBorderData(show: false),
+      lineBarsData: [
+        LineChartBarData(
+          spots: readings
+              .asMap()
+              .entries
+              .map(
+                (entry) =>
+                    FlSpot(entry.key.toDouble(), entry.value.aqi.toDouble()),
+              )
+              .toList(),
+          isCurved: true,
+          color: const Color(0xFF0F9D58),
+          barWidth: 3,
+          dotData: const FlDotData(show: true),
+          belowBarData: BarAreaData(
+            show: true,
+            color: const Color(0xFF0F9D58).withValues(alpha: 0.1),
+          ),
+        ),
+      ],
+    );
+  }
+
+  BarChartData _buildBarChart(List<City> readings) {
+    final displayReadings = readings.take(6).toList();
+    final maxY =
+        displayReadings.map((city) => city.aqi).reduce(max).toDouble() + 40;
+
+    return BarChartData(
+      minY: 0,
+      maxY: max(120, maxY),
+      gridData: const FlGridData(show: false),
+      titlesData: FlTitlesData(
+        rightTitles: const AxisTitles(
+          sideTitles: SideTitles(showTitles: false),
+        ),
+        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        leftTitles: const AxisTitles(
+          sideTitles: SideTitles(showTitles: true, reservedSize: 34),
+        ),
+        bottomTitles: AxisTitles(
+          sideTitles: SideTitles(
+            showTitles: true,
+            reservedSize: 34,
+            getTitlesWidget: (value, meta) {
+              final index = value.toInt();
+              if (index < 0 || index >= displayReadings.length) {
+                return const SizedBox.shrink();
+              }
+              return Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  _shortName(displayReadings[index].name),
+                  style: const TextStyle(fontSize: 9, color: Colors.grey),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+      borderData: FlBorderData(show: false),
+      barGroups: displayReadings.asMap().entries.map((entry) {
+        final city = entry.value;
+        return BarChartGroupData(
+          x: entry.key,
+          barRods: [
+            BarChartRodData(
+              toY: city.aqi.toDouble(),
+              color: city.aqiColor,
+              width: 20,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(4),
+              ),
+            ),
+          ],
+        );
+      }).toList(),
+    );
+  }
+
+  Map<String, int> _pollutantBreakdown(List<City> readings) {
+    final counts = <String, int>{};
+    for (final city in readings) {
+      counts[city.pollutant] = (counts[city.pollutant] ?? 0) + 1;
+    }
+
+    return Map.fromEntries(
+      counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value)),
+    );
+  }
+
+  Widget _buildStatCard(
+    String title,
+    String value,
+    String note,
+    Color accentColor,
+    IconData icon,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -168,23 +315,42 @@ class AnalyticsScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 8),
-          Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
           Row(
             children: [
-              Icon(change.startsWith('+') ? Icons.trending_up : Icons.trending_down, size: 12, color: changeColor),
-              const SizedBox(width: 4),
-              Text(change, style: TextStyle(fontSize: 10, color: changeColor, fontWeight: FontWeight.bold)),
+              Icon(icon, size: 16, color: accentColor),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            note,
+            style: TextStyle(
+              fontSize: 10,
+              color: accentColor,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildChartContainer({required String title, required Widget child}) {
+  Widget _buildChartContainer({
+    required String title,
+    required Widget child,
+    Widget? trailing,
+  }) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -197,21 +363,14 @@ class AnalyticsScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              if (title == 'AQI Trend')
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey[200]!),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Row(
-                    children: [
-                      Text('Kuala Lumpur', style: TextStyle(fontSize: 12)),
-                      Icon(Icons.keyboard_arrow_down, size: 16),
-                    ],
-                  ),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
+              ),
+              ...?(trailing == null ? null : [trailing]),
             ],
           ),
           const SizedBox(height: 24),
@@ -221,47 +380,158 @@ class AnalyticsScreen extends StatelessWidget {
     );
   }
 
-  BarChartGroupData _buildBarGroup(int x, double y) {
-    return BarChartGroupData(
-      x: x,
-      barRods: [
-        BarChartRodData(
-          toY: y,
-          color: const Color(0xFF0F9D58),
-          width: 20,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPollutantRow(String name, int value, Color color) {
+  Widget _buildPollutantRow(String name, int count, Color color) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Row(
         children: [
-          SizedBox(width: 50, child: Text(name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+          SizedBox(
+            width: 58,
+            child: Text(
+              name,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+          ),
           Expanded(
             child: Stack(
               children: [
                 Container(
                   height: 8,
-                  decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(4)),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
                 FractionallySizedBox(
-                  widthFactor: value / 100,
+                  widthFactor: min(1, count / 5),
                   child: Container(
                     height: 8,
-                    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4)),
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 12),
-          SizedBox(width: 30, child: Text('$value', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+          SizedBox(
+            width: 58,
+            child: Text(
+              '$count station${count == 1 ? '' : 's'}',
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Widget _buildInsightCard(List<City> readings, int averageAqi, int maxAqi) {
+    final worstCity = readings.reduce((a, b) => a.aqi >= b.aqi ? a : b);
+    final advice = maxAqi > 100
+        ? 'Limit outdoor activities near ${worstCity.name}. Use a mask when haze is visible and keep indoor air filtered.'
+        : 'Overall readings are acceptable. Continue monitoring conditions before outdoor activities.';
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.amber[50],
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.health_and_safety_outlined, color: Colors.amber[900]),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Health Insight',
+                  style: TextStyle(
+                    color: Colors.amber[900],
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Average AQI is $averageAqi. Highest station is ${worstCity.name} with AQI ${worstCity.aqi}. $advice',
+                  style: TextStyle(
+                    color: Colors.amber[900]?.withValues(alpha: 0.85),
+                    fontSize: 13,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.analytics_outlined, size: 56, color: Colors.grey[300]),
+          const SizedBox(height: 12),
+          const Text(
+            'No readings available',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Pull to refresh live data, or add APIMS stations to favorites.',
+            style: TextStyle(color: Colors.grey),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _shortName(String name) {
+    final parts = name.split(RegExp(r'\s+'));
+    if (parts.length == 1) {
+      return parts.first.substring(0, min(4, parts.first.length));
+    }
+    return parts
+        .take(2)
+        .map((part) => part.isEmpty ? '' : part[0].toUpperCase())
+        .join();
+  }
+
+  Color _aqiColor(int aqi) {
+    if (aqi <= 50) return Colors.green;
+    if (aqi <= 100) return Colors.yellow[700]!;
+    if (aqi <= 150) return Colors.orange;
+    if (aqi <= 200) return Colors.red;
+    if (aqi <= 300) return Colors.purple;
+    return Colors.brown;
+  }
+
+  Color _pollutantColor(String pollutant) {
+    switch (pollutant.toUpperCase()) {
+      case 'PM2.5':
+        return Colors.orange;
+      case 'PM10':
+        return Colors.yellow[700]!;
+      case 'NO2':
+        return Colors.teal;
+      case 'O3':
+        return Colors.blue;
+      default:
+        return const Color(0xFF0F9D58);
+    }
   }
 }

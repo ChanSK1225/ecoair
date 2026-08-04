@@ -17,6 +17,35 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
   @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleEmailLogin() async {
+    setState(() => _isLoading = true);
+    await Provider.of<AuthProvider>(
+      context,
+      listen: false,
+    ).login(_emailController.text, _passwordController.text);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleGoogleLogin() async {
+    setState(() => _isLoading = true);
+    await Provider.of<AuthProvider>(
+      context,
+      listen: false,
+    ).login('google.user@ecoair.my', 'google-demo');
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
@@ -44,38 +73,49 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 48),
-              
+
               // Google Login
               OutlinedButton.icon(
-                onPressed: () {},
-                icon: Image.network(
-                  'https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png',
-                  height: 20,
+                onPressed: _isLoading ? null : _handleGoogleLogin,
+                icon: const Icon(
+                  Icons.account_circle_outlined,
+                  color: Colors.black,
                 ),
-                label: const Text('Continue with Google', style: TextStyle(color: Colors.black)),
+                label: const Text(
+                  'Continue with Google',
+                  style: TextStyle(color: Colors.black),
+                ),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 50),
                   side: BorderSide(color: Colors.grey[300]!),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
-              
+
               const SizedBox(height: 24),
               const Row(
                 children: [
                   Expanded(child: Divider()),
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text('OR', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    child: Text(
+                      'OR',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
                   ),
                   Expanded(child: Divider()),
                 ],
               ),
               const SizedBox(height: 24),
-              
+
               Align(
                 alignment: Alignment.centerLeft,
-                child: const Text('Email', style: TextStyle(fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'Email',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -83,23 +123,33 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: InputDecoration(
                   hintText: 'you@example.com',
                   prefixIcon: const Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Password', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Password',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   TextButton(
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const ResetPasswordScreen()),
+                        MaterialPageRoute(
+                          builder: (context) => const ResetPasswordScreen(),
+                        ),
                       );
                     },
-                    child: const Text('Forgot password?', style: TextStyle(fontSize: 12)),
+                    child: const Text(
+                      'Forgot password?',
+                      style: TextStyle(fontSize: 12),
+                    ),
                   ),
                 ],
               ),
@@ -109,33 +159,35 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: InputDecoration(
                   hintText: '••••••••',
                   prefixIcon: const Icon(Icons.lock_outline),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               ElevatedButton(
-                onPressed: _isLoading ? null : () async {
-                  setState(() => _isLoading = true);
-                  await Provider.of<AuthProvider>(context, listen: false).login(
-                    _emailController.text,
-                    _passwordController.text,
-                  );
-                  if (mounted) {
-                    setState(() => _isLoading = false);
-                  }
-                },
+                onPressed: _isLoading ? null : _handleEmailLogin,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF18181B),
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                child: _isLoading 
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Log in'),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text('Log in'),
               ),
-              
+
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -145,12 +197,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                        MaterialPageRoute(
+                          builder: (context) => const RegisterScreen(),
+                        ),
                       );
                     },
                     child: const Text(
                       'Create one',
-                      style: TextStyle(fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        decoration: TextDecoration.underline,
+                      ),
                     ),
                   ),
                 ],

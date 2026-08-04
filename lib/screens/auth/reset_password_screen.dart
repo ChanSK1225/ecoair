@@ -25,7 +25,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   color: Colors.black,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.mail_outline, color: Colors.white, size: 32),
+                child: const Icon(
+                  Icons.mail_outline,
+                  color: Colors.white,
+                  size: 32,
+                ),
               ),
               const SizedBox(height: 24),
               const Text(
@@ -38,10 +42,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 style: TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 48),
-              
+
               Align(
                 alignment: Alignment.centerLeft,
-                child: const Text('Email address', style: TextStyle(fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'Email address',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -49,27 +56,33 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 decoration: InputDecoration(
                   hintText: 'you@example.com',
                   prefixIcon: const Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               ElevatedButton(
                 onPressed: () {
                   // Show success snackbar and pop
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Reset link sent to your email')),
+                    const SnackBar(
+                      content: Text('Reset link sent to your email'),
+                    ),
                   );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF18181B),
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 child: const Text('Send reset link'),
               ),
-              
+
               const SizedBox(height: 24),
               TextButton.icon(
                 onPressed: () => Navigator.pop(context),

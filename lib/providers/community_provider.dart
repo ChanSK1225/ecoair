@@ -14,29 +14,33 @@ class CommunityProvider with ChangeNotifier {
     _posts = [
       CommunityPost(
         id: '1',
-        content: 'Haze is getting bad near Putrajaya today. Stay safe everyone! 😷',
+        content:
+            'Haze is getting bad near Putrajaya today. Stay safe everyone!',
         location: 'Putrajaya',
         aqiAtTime: 165,
         aqiStatus: 'Unhealthy',
         likes: 24,
         authorName: 'Ahmad R.',
-        imageUrl: 'https://images.unsplash.com/photo-1542601906990-b4d3fb75bb44?auto=format&fit=crop&q=80&w=800',
+        imageUrl:
+            'https://images.unsplash.com/photo-1542601906990-b4d3fb75bb44?auto=format&fit=crop&q=80&w=800',
         timestamp: DateTime.now().subtract(const Duration(hours: 2)),
       ),
       CommunityPost(
         id: '2',
-        content: 'Beautiful clear sky in Penang today! AQI is only 35 ☀️',
+        content: 'Beautiful clear sky in Penang today! AQI is only 35.',
         location: 'Penang',
         aqiAtTime: 35,
         aqiStatus: 'Good',
         likes: 42,
         authorName: 'Siti N.',
-        imageUrl: 'https://images.unsplash.com/photo-1596422846543-75c6fc18a5cf?auto=format&fit=crop&q=80&w=800',
+        imageUrl:
+            'https://images.unsplash.com/photo-1596422846543-75c6fc18a5cf?auto=format&fit=crop&q=80&w=800',
         timestamp: DateTime.now().subtract(const Duration(hours: 5)),
       ),
       CommunityPost(
         id: '3',
-        content: 'AQI in Kuala Lumpur is moderate. Still okay for outdoor activities.',
+        content:
+            'AQI in Kuala Lumpur is moderate. Still okay for outdoor activities.',
         location: 'Kuala Lumpur',
         aqiAtTime: 182,
         aqiStatus: 'Unhealthy',
@@ -50,6 +54,25 @@ class CommunityProvider with ChangeNotifier {
 
   void addPost(CommunityPost post) {
     _posts.insert(0, post);
+    notifyListeners();
+  }
+
+  void likePost(String postId) {
+    final index = _posts.indexWhere((post) => post.id == postId);
+    if (index < 0) return;
+
+    final post = _posts[index];
+    _posts[index] = CommunityPost(
+      id: post.id,
+      content: post.content,
+      imageUrl: post.imageUrl,
+      location: post.location,
+      aqiAtTime: post.aqiAtTime,
+      aqiStatus: post.aqiStatus,
+      likes: post.likes + 1,
+      authorName: post.authorName,
+      timestamp: post.timestamp,
+    );
     notifyListeners();
   }
 }

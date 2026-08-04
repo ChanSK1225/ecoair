@@ -18,4 +18,32 @@ class AirAlert {
     this.isRead = false,
     required this.timestamp,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'message': message,
+      'type': type,
+      'severity': severity,
+      'city': city,
+      'aqiValue': aqiValue,
+      'isRead': isRead,
+      'timestamp': timestamp.toIso8601String(),
+    };
+  }
+
+  factory AirAlert.fromJson(Map<String, dynamic> json) {
+    return AirAlert(
+      title: json['title'] as String,
+      message: json['message'] as String,
+      type: json['type'] as String,
+      severity: json['severity'] as String,
+      city: json['city'] as String,
+      aqiValue: json['aqiValue'] as int? ?? 0,
+      isRead: json['isRead'] as bool? ?? false,
+      timestamp:
+          DateTime.tryParse(json['timestamp'] as String? ?? '') ??
+          DateTime.now(),
+    );
+  }
 }
