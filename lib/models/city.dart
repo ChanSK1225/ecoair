@@ -27,6 +27,34 @@ class City {
     this.isFavorite = false,
   });
 
+  City copyWith({
+    String? name,
+    String? state,
+    int? aqi,
+    String? pollutant,
+    double? temperature,
+    double? humidity,
+    double? windSpeed,
+    double? latitude,
+    double? longitude,
+    String? status,
+    bool? isFavorite,
+  }) {
+    return City(
+      name: name ?? this.name,
+      state: state ?? this.state,
+      aqi: aqi ?? this.aqi,
+      pollutant: pollutant ?? this.pollutant,
+      temperature: temperature ?? this.temperature,
+      humidity: humidity ?? this.humidity,
+      windSpeed: windSpeed ?? this.windSpeed,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      status: status ?? this.status,
+      isFavorite: isFavorite ?? this.isFavorite,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'name': name,
@@ -45,16 +73,16 @@ class City {
 
   factory City.fromJson(Map<String, dynamic> json) {
     return City(
-      name: json['name'],
-      state: json['state'],
-      aqi: json['aqi'],
-      pollutant: json['pollutant'],
-      temperature: json['temperature'].toDouble(),
-      humidity: json['humidity'].toDouble(),
-      windSpeed: json['windSpeed'].toDouble(),
-      latitude: json['latitude'].toDouble(),
-      longitude: json['longitude'].toDouble(),
-      status: json['status'],
+      name: '${json['name'] ?? 'Unknown station'}',
+      state: '${json['state'] ?? 'Malaysia'}',
+      aqi: (json['aqi'] as num?)?.round() ?? 0,
+      pollutant: '${json['pollutant'] ?? 'PM2.5'}',
+      temperature: (json['temperature'] as num?)?.toDouble() ?? 0,
+      humidity: (json['humidity'] as num?)?.toDouble() ?? 0,
+      windSpeed: (json['windSpeed'] as num?)?.toDouble() ?? 0,
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+      status: '${json['status'] ?? 'Unknown'}',
       isFavorite: json['isFavorite'] ?? false,
     );
   }

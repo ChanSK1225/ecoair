@@ -91,7 +91,7 @@ class StoreProvider with ChangeNotifier {
       final rows = jsonDecode(encoded) as List<dynamic>;
       return rows
           .map((row) {
-            final data = row as Map<String, dynamic>;
+            final data = Map<String, dynamic>.from(row as Map);
             final product = _findProduct(data['productId'] as String? ?? '');
             if (product == null) return null;
             return CartItem(
@@ -112,7 +112,9 @@ class StoreProvider with ChangeNotifier {
     try {
       final rows = jsonDecode(encoded) as List<dynamic>;
       return rows
-          .map((row) => StoreOrder.fromJson(row as Map<String, dynamic>))
+          .map(
+            (row) => StoreOrder.fromJson(Map<String, dynamic>.from(row as Map)),
+          )
           .toList();
     } catch (_) {
       return [];

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/store_provider.dart';
+import '../../theme/ecoair_theme.dart';
+import '../../widgets/ecoair_ui.dart';
 import 'checkout_success_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -51,7 +53,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       body: storeProvider.cart.isEmpty
           ? _buildEmptyCheckout(context)
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
               child: Form(
                 key: _formKey,
                 child: Column(
@@ -60,63 +62,71 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     _buildSection(
                       'Order Summary',
                       Column(
-                        children: storeProvider.cart.map((item) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item.product.name,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                        ),
+                        children: storeProvider.cart
+                            .map(
+                              (item) => Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            item.product.name,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          Text(
+                                            'Qty: ${item.quantity}',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: EcoAirColors.softMuted,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      Text(
-                                        'Qty: ${item.quantity}',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey,
-                                        ),
+                                    ),
+                                    Text(
+                                      'RM ${item.total.toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                                Text('RM ${item.total.toStringAsFixed(2)}'),
-                              ],
-                            ),
-                          );
-                        }).toList(),
+                              ),
+                            )
+                            .toList(),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
                           'Total',
                           style: TextStyle(
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
                             fontSize: 18,
                           ),
                         ),
                         Text(
                           'RM ${storeProvider.cartTotal.toStringAsFixed(2)}',
                           style: const TextStyle(
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w900,
                             fontSize: 18,
-                            color: Color(0xFF0F9D58),
+                            color: EcoAirColors.primary,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 28),
                     _buildSection(
                       'Delivery Details',
                       Column(
@@ -166,6 +176,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               label: 'Card Number',
                               icon: Icons.credit_card,
                               keyboardType: TextInputType.number,
+                              validator: _validateCardNumber,
                             ),
                             const SizedBox(height: 12),
                             Row(
@@ -174,6 +185,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   child: _buildTextField(
                                     controller: _expiryController,
                                     label: 'Expiry',
+                                    validator: _validateExpiry,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -182,31 +194,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                     controller: _cvvController,
                                     label: 'CVV',
                                     keyboardType: TextInputType.number,
+                                    validator: _validateCvv,
                                   ),
                                 ),
                               ],
                             ),
                           ] else
-                            Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: Colors.green[50],
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(
-                                    Icons.account_balance,
-                                    color: Color(0xFF0F9D58),
-                                  ),
-                                  SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      'Online banking payment will be processed through EcoAir demo gateway.',
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            const EcoAirInlineMessage(
+                              icon: Icons.account_balance,
+                              title: 'Demo gateway',
+                              message:
+                                  'Online banking payment will be processed through EcoAir demo gateway.',
                             ),
                           const SizedBox(height: 16),
                           Row(
@@ -229,7 +227,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 48),
+                    const SizedBox(height: 32),
                     ElevatedButton.icon(
                       onPressed: () => _placeOrder(context, storeProvider),
                       icon: const Icon(Icons.payment),
@@ -237,12 +235,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         'Pay RM ${storeProvider.cartTotal.toStringAsFixed(2)}',
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0F9D58),
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 50),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        minimumSize: const Size(double.infinity, 52),
                       ),
                     ),
                   ],
@@ -253,34 +246,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _buildEmptyCheckout(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.shopping_cart_outlined,
-              size: 64,
-              color: Colors.grey[300],
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Your cart is empty',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Add protection products before checkout.',
-              style: TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Back to Store'),
-            ),
-          ],
-        ),
+    return EcoAirEmptyState(
+      icon: Icons.shopping_cart_outlined,
+      title: 'Your cart is empty',
+      message: 'Add protection products before checkout.',
+      action: ElevatedButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Back to Store'),
       ),
     );
   }
@@ -295,9 +267,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
 
     if (order == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Your cart is empty.')));
+      showEcoAirSnackBar(context, 'Your cart is empty.', isError: true);
       return;
     }
 
@@ -310,18 +280,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _buildSection(String title, Widget content) {
-    return Container(
-      width: double.infinity,
+    return EcoAirCard(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[100]!),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 16),
           content,
         ],
@@ -335,35 +299,42 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     IconData? icon,
     int maxLines = 1,
     TextInputType? keyboardType,
+    String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return '$label is required';
-        }
-        return null;
-      },
+      validator: validator ?? (value) => _required(label, value),
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: icon == null ? null : Icon(icon),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 12,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey[200]!),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey[200]!),
-        ),
       ),
     );
+  }
+
+  String? _required(String label, String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return '$label is required';
+    }
+    return null;
+  }
+
+  String? _validateCardNumber(String? value) {
+    final digits = value?.replaceAll(RegExp(r'\D'), '') ?? '';
+    if (digits.length < 12) return 'Enter a valid card number';
+    return null;
+  }
+
+  String? _validateExpiry(String? value) {
+    final text = value?.trim() ?? '';
+    if (!RegExp(r'^\d{2}/\d{2}$').hasMatch(text)) return 'Use MM/YY';
+    return null;
+  }
+
+  String? _validateCvv(String? value) {
+    final text = value?.trim() ?? '';
+    if (!RegExp(r'^\d{3,4}$').hasMatch(text)) return 'Invalid CVV';
+    return null;
   }
 }

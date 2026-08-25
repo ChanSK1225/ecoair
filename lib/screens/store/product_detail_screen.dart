@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/store_provider.dart';
 import '../../models/product.dart';
+import '../../theme/ecoair_theme.dart';
+import '../../widgets/ecoair_ui.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final Product product;
@@ -29,6 +31,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   background: Image.network(
                     widget.product.imageUrl,
                     fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: EcoAirColors.mint,
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.inventory_2_outlined,
+                        color: EcoAirColors.primary,
+                        size: 56,
+                      ),
+                    ),
                   ),
                 ),
                 leading: IconButton(
@@ -108,7 +119,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F9D58),
+                          color: EcoAirColors.primary,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -198,19 +209,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           context,
                           listen: false,
                         ).addToCart(widget.product, quantity: _quantity);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Added to cart')),
+                        showEcoAirSnackBar(
+                          context,
+                          '${widget.product.name} added to cart.',
                         );
                       },
                       icon: const Icon(Icons.shopping_cart),
                       label: const Text('Add to Cart'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0F9D58),
-                        foregroundColor: Colors.white,
                         minimumSize: const Size(double.infinity, 50),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
                       ),
                     ),
                   ),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../theme/ecoair_theme.dart';
+import '../../widgets/ecoair_ui.dart';
 import 'register_screen.dart';
 import 'reset_password_screen.dart';
 
@@ -24,25 +26,48 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleEmailLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (!_isValidEmail(email)) {
+      showEcoAirSnackBar(context, 'Please enter a valid email.', isError: true);
+      return;
+    }
+    if (password.trim().isEmpty) {
+      showEcoAirSnackBar(context, 'Please enter your password.', isError: true);
+      return;
+    }
+
     setState(() => _isLoading = true);
-    await Provider.of<AuthProvider>(
-      context,
-      listen: false,
-    ).login(_emailController.text, _passwordController.text);
-    if (mounted) {
-      setState(() => _isLoading = false);
+    try {
+      await Provider.of<AuthProvider>(
+        context,
+        listen: false,
+      ).login(email, password);
+    } catch (e) {
+      if (!mounted) return;
+      showEcoAirSnackBar(context, friendlyError(e), isError: true);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _handleGoogleLogin() async {
     setState(() => _isLoading = true);
-    await Provider.of<AuthProvider>(
-      context,
-      listen: false,
-    ).login('google.user@ecoair.my', 'google-demo');
-    if (mounted) {
-      setState(() => _isLoading = false);
+    try {
+      await Provider.of<AuthProvider>(
+        context,
+        listen: false,
+      ).login('google.user@ecoair.my', 'google-demo');
+    } catch (e) {
+      if (!mounted) return;
+      showEcoAirSnackBar(context, friendlyError(e), isError: true);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
   }
 
   @override
@@ -57,10 +82,10 @@ class _LoginScreenState extends State<LoginScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(12),
+                  color: EcoAirColors.primary,
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(Icons.login, color: Colors.white, size: 32),
+                child: const Icon(Icons.air, color: Colors.white, size: 32),
               ),
               const SizedBox(height: 24),
               const Text(
@@ -169,12 +194,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ElevatedButton(
                 onPressed: _isLoading ? null : _handleEmailLogin,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF18181B),
-                  foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
                 ),
                 child: _isLoading
                     ? const SizedBox(

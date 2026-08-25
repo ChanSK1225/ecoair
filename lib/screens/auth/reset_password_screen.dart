@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../theme/ecoair_theme.dart';
+import '../../widgets/ecoair_ui.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key});
@@ -9,6 +11,16 @@ class ResetPasswordScreen extends StatefulWidget {
 
 class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _emailController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,8 +34,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(12),
+                  color: EcoAirColors.primary,
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Icon(
                   Icons.mail_outline,
@@ -65,20 +77,18 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
               ElevatedButton(
                 onPressed: () {
-                  // Show success snackbar and pop
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Reset link sent to your email'),
-                    ),
-                  );
+                  if (!_isValidEmail(_emailController.text.trim())) {
+                    showEcoAirSnackBar(
+                      context,
+                      'Please enter a valid email.',
+                      isError: true,
+                    );
+                    return;
+                  }
+                  showEcoAirSnackBar(context, 'Reset link sent to your email.');
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF18181B),
-                  foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
                 ),
                 child: const Text('Send reset link'),
               ),

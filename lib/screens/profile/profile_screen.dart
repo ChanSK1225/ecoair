@@ -7,6 +7,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/community_provider.dart';
 import '../../providers/store_provider.dart';
 import '../../providers/weather_provider.dart';
+import '../../theme/ecoair_theme.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -60,7 +61,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
         child: Column(
           children: [
             Container(
@@ -73,7 +74,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   CircleAvatar(
                     radius: 35,
-                    backgroundColor: const Color(0xFF0F9D58),
+                    backgroundColor: EcoAirColors.primary,
                     child: Text(
                       initial,
                       style: const TextStyle(
@@ -112,7 +113,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: const Text(
                             'EcoAir Member',
                             style: TextStyle(
-                              color: Color(0xFF0F9D58),
+                              color: EcoAirColors.primary,
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
                             ),
@@ -206,7 +207,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 24),
             Text(
-              'EcoAir Malaysia v1.0 - SDG #3 & #13',
+              'EcoAir Malaysia v1.0 - SDG #9',
               style: TextStyle(color: Colors.grey[400], fontSize: 10),
             ),
           ],
@@ -229,7 +230,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF0F9D58),
+              color: EcoAirColors.primary,
             ),
           ),
           Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
@@ -302,7 +303,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       max: 200,
                       divisions: 6,
                       label: '${_alertThreshold.round()}',
-                      activeColor: const Color(0xFF0F9D58),
+                      activeColor: EcoAirColors.primary,
                       onChanged: (value) =>
                           update(() => _alertThreshold = value),
                     ),

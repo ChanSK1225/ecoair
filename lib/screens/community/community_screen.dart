@@ -1,222 +1,327 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/community_post.dart';
 import '../../providers/community_provider.dart';
+import '../../theme/ecoair_theme.dart';
+import '../../widgets/ecoair_ui.dart';
 import 'create_post_screen.dart';
-import '../qr_scanner/qr_scanner_screen.dart';
+import 'my_contributions_screen.dart';
 
-class CommunityScreen extends StatelessWidget {
+class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final communityProvider = Provider.of<CommunityProvider>(context);
+  State<CommunityScreen> createState() => _CommunityScreenState();
+}
 
+class _CommunityScreenState extends State<CommunityScreen> {
+  bool _locationRequested = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_locationRequested) return;
+    _locationRequested = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<CommunityProvider>().refreshLocation();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Community',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              'Share your local air quality reports',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'QR scanner',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const QRScannerScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.qr_code_scanner_outlined),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0, left: 8.0),
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CreatePostScreen(),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.camera_alt, size: 16),
-              label: const Text('Post'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0F9D58),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
+      backgroundColor: EcoAirColors.background,
+      body: SafeArea(
+        child: Consumer<CommunityProvider>(
+          builder: (context, communityProvider, child) {
+            final posts = communityProvider.postsSortedByDistance();
+
+            return RefreshIndicator(
+              onRefresh: communityProvider.refreshLocation,
+              color: EcoAirColors.primary,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
+                children: [
+                  _buildHeader(context),
+                  const SizedBox(height: 16),
+                  _buildLocationBanner(context, communityProvider),
+                  if (communityProvider.locationError != null) ...[
+                    const SizedBox(height: 12),
+                    EcoAirInlineMessage(
+                      icon: Icons.location_off_outlined,
+                      title: 'GPS fallback',
+                      message: communityProvider.locationError!,
+                      color: EcoAirColors.warning,
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  if (posts.isEmpty)
+                    const EcoAirEmptyState(
+                      icon: Icons.groups_outlined,
+                      title: 'No nearby reports',
+                      message:
+                          'Create the first air quality or open burning report near you.',
+                    )
+                  else
+                    ...posts.map(
+                      (post) => Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _buildPostCard(context, communityProvider, post),
+                      ),
+                    ),
+                ],
               ),
-            ),
-          ),
-        ],
-      ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: communityProvider.posts.length,
-        separatorBuilder: (context, index) => const SizedBox(height: 16),
-        itemBuilder: (context, index) {
-          final post = communityProvider.posts[index];
-          return _buildPostCard(context, post);
-        },
+            );
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildPostCard(BuildContext context, dynamic post) {
-    final communityProvider = Provider.of<CommunityProvider>(
-      context,
-      listen: false,
+  Widget _buildHeader(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Community',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Nearby hazards and air quality reports',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+        IconButton.filledTonal(
+          tooltip: 'My Contributions',
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const MyContributionsScreen(),
+              ),
+            );
+          },
+          icon: const Icon(Icons.article_outlined),
+        ),
+        const SizedBox(width: 10),
+        ElevatedButton.icon(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const CreatePostScreen()),
+            );
+          },
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text('Post'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF059669),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+          ),
+        ),
+      ],
     );
+  }
+
+  Widget _buildLocationBanner(
+    BuildContext context,
+    CommunityProvider communityProvider,
+  ) {
+    final statusText = communityProvider.isLocating
+        ? 'Locating...'
+        : communityProvider.usingDemoLocation
+        ? 'Segamat demo location · posts sorted by distance'
+        : 'Located · posts sorted by distance';
 
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF5),
+        border: Border.all(color: const Color(0xFFA7F3D0)),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.navigation_outlined, color: Color(0xFF059669)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              statusText,
+              style: const TextStyle(
+                color: Color(0xFF047857),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: communityProvider.isLocating
+                ? null
+                : communityProvider.refreshLocation,
+            child: const Text('Refresh'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPostCard(
+    BuildContext context,
+    CommunityProvider communityProvider,
+    CommunityPost post,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x11000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: const Color(0xFF14B8A6),
+                child: Text(
+                  post.authorName.isEmpty
+                      ? '?'
+                      : post.authorName[0].toLowerCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  post.authorName,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              _buildPill(
+                Icons.navigation_outlined,
+                communityProvider.distanceLabel(post),
+                const Color(0xFFD1FAE5),
+                const Color(0xFF059669),
+              ),
+              const SizedBox(width: 8),
+              _buildPill(
+                null,
+                'AQI ${post.aqiAtTime}',
+                const Color(0xFFFEF3C7),
+                const Color(0xFFD97706),
+              ),
+            ],
+          ),
+          if (post.location.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: const Color(0xFF0F9D58),
-                  child: Text(
-                    post.authorName[0],
-                    style: const TextStyle(color: Colors.white),
-                  ),
+                const Icon(
+                  Icons.location_on_outlined,
+                  size: 14,
+                  color: Color(0xFF94A3B8),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 4),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        post.authorName,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        post.location,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.red[50],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
                   child: Text(
-                    'AQI ${post.aqiAtTime}',
+                    post.location,
                     style: const TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 10,
+                      color: Color(0xFF94A3B8),
+                      fontSize: 12,
                     ),
                   ),
                 ),
               ],
             ),
+          ],
+          const SizedBox(height: 20),
+          Text(
+            post.content,
+            style: const TextStyle(
+              color: Color(0xFF0F172A),
+              fontSize: 16,
+              height: 1.4,
+            ),
           ),
-          if (post.imageUrl != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: _buildPostImage(post.imageUrl!),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              _buildAction(
+                Icons.favorite_border,
+                '${post.likes}',
+                () => communityProvider.likePost(post.id),
               ),
-            ),
-          Padding(padding: const EdgeInsets.all(16), child: Text(post.content)),
-          Padding(
-            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-            child: Row(
-              children: [
-                _buildAction(
-                  Icons.favorite_border,
-                  '${post.likes}',
-                  () => communityProvider.likePost(post.id),
-                ),
-                const SizedBox(width: 24),
-                _buildAction(
-                  Icons.chat_bubble_outline,
-                  'Reply',
-                  () => _showSnack(context, 'Reply feature is ready for demo.'),
-                ),
-                const SizedBox(width: 24),
-                _buildAction(
-                  Icons.share_outlined,
-                  'Share',
-                  () => _showSnack(context, 'Post share preview prepared.'),
-                ),
-              ],
-            ),
+              const SizedBox(width: 20),
+              _buildAction(
+                Icons.chat_bubble_outline,
+                'Reply',
+                () => _showSnack(context, 'Reply feature is ready for demo.'),
+              ),
+              const SizedBox(width: 20),
+              _buildAction(
+                Icons.share_outlined,
+                'Share',
+                () => _showSnack(context, 'Post share preview prepared.'),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPostImage(String imageUrl) {
-    final isNetworkImage =
-        imageUrl.startsWith('http://') || imageUrl.startsWith('https://');
-
-    if (isNetworkImage) {
-      return Image.network(
-        imageUrl,
-        height: 200,
-        width: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => _imageFallback(),
-      );
-    }
-
-    final file = File(imageUrl);
-    if (!file.existsSync()) {
-      return _imageFallback();
-    }
-
-    return Image.file(
-      file,
-      height: 200,
-      width: double.infinity,
-      fit: BoxFit.cover,
-    );
-  }
-
-  Widget _imageFallback() {
+  Widget _buildPill(
+    IconData? icon,
+    String label,
+    Color background,
+    Color foreground,
+  ) {
     return Container(
-      height: 200,
-      width: double.infinity,
-      color: const Color(0xFFE8F5E9),
-      alignment: Alignment.center,
-      child: const Icon(
-        Icons.image_not_supported_outlined,
-        color: Color(0xFF0F9D58),
-        size: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: foreground),
+            const SizedBox(width: 2),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              color: foreground,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -224,16 +329,17 @@ class CommunityScreen extends StatelessWidget {
   Widget _buildAction(IconData icon, String label, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(18),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 20, color: Colors.grey),
-            const SizedBox(width: 4),
+            Icon(icon, size: 20, color: const Color(0xFF94A3B8)),
+            const SizedBox(width: 6),
             Text(
               label,
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
+              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
             ),
           ],
         ),
@@ -242,8 +348,6 @@ class CommunityScreen extends StatelessWidget {
   }
 
   void _showSnack(BuildContext context, String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showEcoAirSnackBar(context, message);
   }
 }

@@ -8,19 +8,36 @@ import '../../models/city.dart';
 import '../../providers/weather_provider.dart';
 import '../reports/report_export_screen.dart';
 
-class AnalyticsScreen extends StatelessWidget {
+class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
+
+  @override
+  State<AnalyticsScreen> createState() => _AnalyticsScreenState();
+}
+
+class _AnalyticsScreenState extends State<AnalyticsScreen> {
+  static const _malaysiaScope = 'Malaysia';
+  String _selectedScope = _malaysiaScope;
 
   @override
   Widget build(BuildContext context) {
     final weatherProvider = Provider.of<WeatherProvider>(context);
-    final readings = _analyticsReadings(weatherProvider);
+    final allReadings = _analyticsReadings(weatherProvider);
+    if (_selectedScope != _malaysiaScope &&
+        !allReadings.any((city) => city.name == _selectedScope)) {
+      _selectedScope = _malaysiaScope;
+    }
+    final readings = _readingsForScope(allReadings);
     final averageAqi = _averageAqi(readings);
     final maxAqi = readings.isEmpty
         ? 0
         : readings.map((city) => city.aqi).reduce(max);
     final goodCount = readings.where((city) => city.aqi <= 50).length;
     final unhealthyCount = readings.where((city) => city.aqi > 100).length;
+    final pollutantBreakdown = _pollutantBreakdown(readings);
+    final maxPollutantCount = pollutantBreakdown.isEmpty
+        ? 1
+        : pollutantBreakdown.values.reduce(max);
     final updated = weatherProvider.lastUpdated;
 
     return Scaffold(
@@ -67,17 +84,19 @@ class AnalyticsScreen extends StatelessWidget {
       ),
       body: RefreshIndicator(
         onRefresh: () => weatherProvider.refreshData(),
-        child: readings.isEmpty
+        child: allReadings.isEmpty
             ? ListView(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 128),
                 children: [_buildEmptyState()],
               )
             : SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 136),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildScopeSelector(allReadings),
+                    const SizedBox(height: 16),
                     Row(
                       children: [
                         Expanded(
@@ -141,11 +160,12 @@ class AnalyticsScreen extends StatelessWidget {
                     _buildChartContainer(
                       title: 'Pollutant Breakdown',
                       child: Column(
-                        children: _pollutantBreakdown(readings).entries
+                        children: pollutantBreakdown.entries
                             .map(
                               (entry) => _buildPollutantRow(
                                 entry.key,
                                 entry.value,
+                                maxPollutantCount,
                                 _pollutantColor(entry.key),
                               ),
                             )
@@ -166,6 +186,59 @@ class AnalyticsScreen extends StatelessWidget {
     return provider.favoriteCities;
   }
 
+  List<City> _readingsForScope(List<City> allReadings) {
+    if (_selectedScope == _malaysiaScope) return allReadings;
+    return allReadings.where((city) => city.name == _selectedScope).toList();
+  }
+
+  Widget _buildScopeSelector(List<City> allReadings) {
+    final stationNames = allReadings.map((city) => city.name).toSet().toList()
+      ..sort();
+    final scopes = [_malaysiaScope, ...stationNames];
+    final value = scopes.contains(_selectedScope)
+        ? _selectedScope
+        : _malaysiaScope;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.tune_outlined, size: 20, color: Color(0xFF059669)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: value,
+                isExpanded: true,
+                borderRadius: BorderRadius.circular(16),
+                items: scopes
+                    .map(
+                      (scope) => DropdownMenuItem<String>(
+                        value: scope,
+                        child: Text(
+                          scope == _malaysiaScope ? 'Overall Malaysia' : scope,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _selectedScope = value);
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   int _averageAqi(List<City> readings) {
     if (readings.isEmpty) return 0;
     final total = readings.fold<int>(0, (sum, city) => sum + city.aqi);
@@ -174,6 +247,7 @@ class AnalyticsScreen extends StatelessWidget {
 
   LineChartData _buildLineChart(List<City> readings) {
     final maxY = readings.map((city) => city.aqi).reduce(max).toDouble() + 40;
+    final labelStep = readings.length > 8 ? (readings.length / 6).ceil() : 1;
 
     return LineChartData(
       minY: 0,
@@ -194,6 +268,9 @@ class AnalyticsScreen extends StatelessWidget {
             getTitlesWidget: (value, meta) {
               final index = value.toInt();
               if (index < 0 || index >= readings.length) {
+                return const SizedBox.shrink();
+              }
+              if (index % labelStep != 0 && index != readings.length - 1) {
                 return const SizedBox.shrink();
               }
               return Padding(
@@ -380,7 +457,7 @@ class AnalyticsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPollutantRow(String name, int count, Color color) {
+  Widget _buildPollutantRow(String name, int count, int maxCount, Color color) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Row(
@@ -403,7 +480,7 @@ class AnalyticsScreen extends StatelessWidget {
                   ),
                 ),
                 FractionallySizedBox(
-                  widthFactor: min(1, count / 5),
+                  widthFactor: min(1, count / maxCount),
                   child: Container(
                     height: 8,
                     decoration: BoxDecoration(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/product.dart';
+import '../../theme/ecoair_theme.dart';
+import '../../widgets/ecoair_ui.dart';
 
 class CheckoutSuccessScreen extends StatelessWidget {
   final StoreOrder order;
@@ -20,12 +22,12 @@ class CheckoutSuccessScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: const BoxDecoration(
-                  color: Color(0xFFDCFCE7),
+                  color: EcoAirColors.mint,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.check_circle,
-                  color: Color(0xFF16A34A),
+                  color: EcoAirColors.primary,
                   size: 80,
                 ),
               ),
@@ -41,13 +43,8 @@ class CheckoutSuccessScreen extends StatelessWidget {
                 style: TextStyle(color: Colors.grey, fontSize: 16),
               ),
               const SizedBox(height: 24),
-              Container(
-                width: double.infinity,
+              EcoAirCard(
                 padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8F9FA),
-                  borderRadius: BorderRadius.circular(16),
-                ),
                 child: Column(
                   children: [
                     _buildRow('Order ID', order.id),
@@ -71,12 +68,7 @@ class CheckoutSuccessScreen extends StatelessWidget {
                   Navigator.popUntil(context, (route) => route.isFirst);
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0F9D58),
-                  foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 54),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
                 ),
                 child: const Text(
                   'Back to Store',

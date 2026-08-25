@@ -4,6 +4,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../../models/city.dart';
 import '../../providers/weather_provider.dart';
+import '../../theme/ecoair_theme.dart';
+import '../../widgets/ecoair_ui.dart';
 import '../analytics/analytics_screen.dart';
 
 class MapScreen extends StatelessWidget {
@@ -92,24 +94,47 @@ class MapScreen extends StatelessWidget {
               ),
             ],
           ),
+          if (weatherProvider.dataError != null)
+            Positioned(
+              top: 104,
+              left: 16,
+              right: 16,
+              child: EcoAirInlineMessage(
+                icon: Icons.info_outline,
+                title: 'Map data note',
+                message: weatherProvider.dataError!,
+                color: EcoAirColors.warning,
+              ),
+            ),
           Positioned(
-            bottom: 100,
+            bottom: 176,
             right: 16,
             child: FloatingActionButton(
-              onPressed: () async {
-                await weatherProvider.fetchCurrentLocation();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Location updated.')),
-                  );
-                }
-              },
+              onPressed: weatherProvider.isLoading
+                  ? null
+                  : () async {
+                      await weatherProvider.fetchCurrentLocation();
+                      if (context.mounted) {
+                        final error = weatherProvider.dataError;
+                        showEcoAirSnackBar(
+                          context,
+                          error ?? 'Location updated.',
+                          isError: error != null,
+                        );
+                      }
+                    },
               backgroundColor: Colors.white,
-              child: const Icon(Icons.my_location, color: Color(0xFF0F9D58)),
+              child: weatherProvider.isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.my_location, color: EcoAirColors.primary),
             ),
           ),
           Positioned(
-            bottom: 32,
+            bottom: 104,
             left: 16,
             child: Container(
               padding: const EdgeInsets.all(12),
@@ -267,8 +292,6 @@ class MapScreen extends StatelessWidget {
                   },
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 50),
-                    backgroundColor: const Color(0xFF0F9D58),
-                    foregroundColor: Colors.white,
                   ),
                   child: const Text('View Detailed Analytics'),
                 ),
@@ -283,7 +306,7 @@ class MapScreen extends StatelessWidget {
   Widget _buildStat(IconData icon, String value, String label) {
     return Column(
       children: [
-        Icon(icon, color: const Color(0xFF0F9D58)),
+        Icon(icon, color: EcoAirColors.primary),
         const SizedBox(height: 4),
         Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
         Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),

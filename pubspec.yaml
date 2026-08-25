@@ -46,10 +46,11 @@ dependencies:
   geolocator: ^13.0.1
   shared_preferences: ^2.5.2
   image_picker: ^1.1.2
-  mobile_scanner: ^7.4.0
   pdf: ^3.13.0
   printing: ^5.15.0
-
+  share_plus: ^13.3.0
+  path_provider: ^2.1.6
+  geocoding: ^4.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

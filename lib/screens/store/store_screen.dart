@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/product.dart';
 import '../../providers/store_provider.dart';
+import '../../theme/ecoair_theme.dart';
+import '../../widgets/ecoair_ui.dart';
 import 'product_detail_screen.dart';
 import 'cart_screen.dart';
 
@@ -62,7 +64,7 @@ class _StoreScreenState extends State<StoreScreen> {
               clipBehavior: Clip.none,
               children: [
                 const Icon(Icons.shopping_cart_outlined),
-                if (storeProvider.cart.isNotEmpty)
+                if (storeProvider.cartItemCount > 0)
                   Positioned(
                     right: -2,
                     top: -2,
@@ -77,7 +79,7 @@ class _StoreScreenState extends State<StoreScreen> {
                         minHeight: 14,
                       ),
                       child: Text(
-                        '${storeProvider.cart.length}',
+                        '${storeProvider.cartItemCount}',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 8,
@@ -95,7 +97,7 @@ class _StoreScreenState extends State<StoreScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             child: TextField(
               controller: _searchController,
               onChanged: (value) => setState(() => _searchQuery = value),
@@ -112,12 +114,6 @@ class _StoreScreenState extends State<StoreScreen> {
                         },
                         icon: const Icon(Icons.close),
                       ),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
               ),
             ),
           ),
@@ -138,19 +134,25 @@ class _StoreScreenState extends State<StoreScreen> {
           Expanded(
             child: filteredProducts.isEmpty
                 ? _buildEmptyState()
-                : GridView.builder(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 0.75,
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      final crossAxisCount = constraints.maxWidth > 720 ? 3 : 2;
+                      return GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 132),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          childAspectRatio: constraints.maxWidth > 720
+                              ? 0.9
+                              : 0.74,
                           crossAxisSpacing: 16,
                           mainAxisSpacing: 16,
                         ),
-                    itemCount: filteredProducts.length,
-                    itemBuilder: (context, index) {
-                      final product = filteredProducts[index];
-                      return _buildProductCard(context, product);
+                        itemCount: filteredProducts.length,
+                        itemBuilder: (context, index) {
+                          final product = filteredProducts[index];
+                          return _buildProductCard(context, product);
+                        },
+                      );
                     },
                   ),
           ),
@@ -179,14 +181,14 @@ class _StoreScreenState extends State<StoreScreen> {
       label: Text(label),
       selected: isSelected,
       onSelected: (_) => setState(() => _selectedCategory = label),
-      selectedColor: const Color(0xFF0F9D58),
+      selectedColor: EcoAirColors.primary,
       backgroundColor: Colors.white,
       labelStyle: TextStyle(
         color: isSelected ? Colors.white : Colors.grey[700],
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
       side: BorderSide(
-        color: isSelected ? const Color(0xFF0F9D58) : Colors.grey[200]!,
+        color: isSelected ? EcoAirColors.primary : Colors.grey[200]!,
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     );
@@ -202,113 +204,95 @@ class _StoreScreenState extends State<StoreScreen> {
           ),
         );
       },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Image.network(
-                product.imageUrl,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return const Center(
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: const Color(0xFFE8F5E9),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.inventory_2_outlined,
-                      color: Color(0xFF0F9D58),
-                      size: 36,
-                    ),
-                  );
-                },
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.star, size: 12, color: Colors.amber),
-                      Text(
-                        ' ${product.rating}',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey,
-                        ),
+      child: EcoAirCard(
+        padding: EdgeInsets.zero,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Image.network(
+                  product.imageUrl,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: EcoAirColors.mint,
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.inventory_2_outlined,
+                        color: EcoAirColors.primary,
+                        size: 36,
                       ),
-                      const Spacer(),
-                      Text(
-                        '${product.stock} left',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'RM ${product.price.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      color: Color(0xFF0F9D58),
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.star, size: 12, color: Colors.amber),
+                        Text(
+                          ' ${product.rating}',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${product.stock} left',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'RM ${product.price.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        color: EcoAirColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.search_off, size: 56, color: Colors.grey[300]),
-            const SizedBox(height: 12),
-            const Text(
-              'No products found',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Try a different keyword or category.',
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+    return const EcoAirEmptyState(
+      icon: Icons.search_off,
+      title: 'No products found',
+      message: 'Try a different keyword or category.',
     );
   }
 }

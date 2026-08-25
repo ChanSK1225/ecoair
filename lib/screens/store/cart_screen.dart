@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/product.dart';
 import '../../providers/store_provider.dart';
+import '../../theme/ecoair_theme.dart';
+import '../../widgets/ecoair_ui.dart';
 import 'checkout_screen.dart';
 
 class CartScreen extends StatelessWidget {
@@ -13,26 +16,14 @@ class CartScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('My Cart')),
       body: storeProvider.cart.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.shopping_cart_outlined,
-                    size: 64,
-                    color: Colors.grey[300],
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Your cart is empty',
-                    style: TextStyle(color: Colors.grey, fontSize: 18),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Go Shopping'),
-                  ),
-                ],
+          ? EcoAirEmptyState(
+              icon: Icons.shopping_cart_outlined,
+              title: 'Your cart is empty',
+              message:
+                  'Add masks or air protection essentials before checkout.',
+              action: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Go Shopping'),
               ),
             )
           : Column(
@@ -71,7 +62,7 @@ class CartScreen extends StatelessWidget {
                             style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF0F9D58),
+                              color: EcoAirColors.primary,
                             ),
                           ),
                         ],
@@ -87,12 +78,7 @@ class CartScreen extends StatelessWidget {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0F9D58),
-                          foregroundColor: Colors.white,
                           minimumSize: const Size(double.infinity, 54),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
                         ),
                         child: const Text(
                           'Proceed to Checkout',
@@ -112,15 +98,11 @@ class CartScreen extends StatelessWidget {
 
   Widget _buildCartItem(
     BuildContext context,
-    dynamic item,
+    CartItem item,
     StoreProvider provider,
   ) {
-    return Container(
+    return EcoAirCard(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
       child: Row(
         children: [
           ClipRRect(
@@ -130,6 +112,16 @@ class CartScreen extends StatelessWidget {
               width: 80,
               height: 80,
               fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                width: 80,
+                height: 80,
+                color: EcoAirColors.mint,
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.inventory_2_outlined,
+                  color: EcoAirColors.primary,
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 16),
@@ -145,7 +137,7 @@ class CartScreen extends StatelessWidget {
                 Text(
                   'RM ${item.product.price.toStringAsFixed(2)}',
                   style: const TextStyle(
-                    color: Color(0xFF0F9D58),
+                    color: EcoAirColors.primary,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -173,7 +165,10 @@ class CartScreen extends StatelessWidget {
             ),
           ),
           IconButton(
-            onPressed: () => provider.removeFromCart(item.product.id),
+            onPressed: () {
+              provider.removeFromCart(item.product.id);
+              showEcoAirSnackBar(context, '${item.product.name} removed.');
+            },
             icon: const Icon(Icons.delete_outline, color: Colors.grey),
           ),
         ],

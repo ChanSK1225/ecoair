@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../theme/ecoair_theme.dart';
+import '../../widgets/ecoair_ui.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -24,27 +26,61 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _handleEmailRegister() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final confirm = _confirmController.text;
+    if (!_isValidEmail(email)) {
+      showEcoAirSnackBar(context, 'Please enter a valid email.', isError: true);
+      return;
+    }
+    if (password.length < 6) {
+      showEcoAirSnackBar(
+        context,
+        'Password must be at least 6 characters.',
+        isError: true,
+      );
+      return;
+    }
+    if (password != confirm) {
+      showEcoAirSnackBar(context, 'Passwords do not match.', isError: true);
+      return;
+    }
+
     setState(() => _isLoading = true);
     final navigator = Navigator.of(context);
-    await Provider.of<AuthProvider>(
-      context,
-      listen: false,
-    ).register(_emailController.text, _passwordController.text);
-    if (mounted) {
-      navigator.pop();
+    try {
+      await Provider.of<AuthProvider>(
+        context,
+        listen: false,
+      ).register(email, password);
+      if (mounted) navigator.pop();
+    } catch (e) {
+      if (!mounted) return;
+      showEcoAirSnackBar(context, friendlyError(e), isError: true);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _handleGoogleRegister() async {
     setState(() => _isLoading = true);
     final navigator = Navigator.of(context);
-    await Provider.of<AuthProvider>(
-      context,
-      listen: false,
-    ).register('google.user@ecoair.my', 'google-demo');
-    if (mounted) {
-      navigator.pop();
+    try {
+      await Provider.of<AuthProvider>(
+        context,
+        listen: false,
+      ).register('google.user@ecoair.my', 'google-demo');
+      if (mounted) navigator.pop();
+    } catch (e) {
+      if (!mounted) return;
+      showEcoAirSnackBar(context, friendlyError(e), isError: true);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
   }
 
   @override
@@ -59,8 +95,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(12),
+                  color: EcoAirColors.primary,
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Icon(
                   Icons.person_add,
@@ -150,12 +186,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ElevatedButton(
                 onPressed: _isLoading ? null : _handleEmailRegister,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF18181B),
-                  foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
                 ),
                 child: _isLoading
                     ? const SizedBox(
