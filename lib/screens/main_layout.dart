@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/weather_provider.dart';
 import '../theme/ecoair_theme.dart';
 import 'home/home_screen.dart';
 import 'map/map_screen.dart';
@@ -13,8 +15,32 @@ class MainLayout extends StatefulWidget {
   State<MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends State<MainLayout> {
+class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    final weather = context.read<WeatherProvider>();
+    if (weather.dataError != null ||
+        weather.lastUpdated == null ||
+        DateTime.now().difference(weather.lastUpdated!) >
+            const Duration(minutes: 5)) {
+      weather.refreshData();
+    }
+  }
 
   final List<Widget> _screens = [
     const HomeScreen(),
@@ -30,25 +56,27 @@ class _MainLayoutState extends State<MainLayout> {
       extendBody: true,
       body: IndexedStack(index: _selectedIndex, children: _screens),
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        minimum: const EdgeInsets.fromLTRB(12, 0, 12, 10),
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(color: EcoAirColors.border),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x18000000),
-                blurRadius: 24,
-                offset: Offset(0, 10),
+                color: Color(0x14000000),
+                blurRadius: 20,
+                offset: Offset(0, 8),
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(22),
             child: NavigationBar(
               selectedIndex: _selectedIndex,
-              height: 68,
+              height: 64,
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+              animationDuration: const Duration(milliseconds: 220),
               onDestinationSelected: (index) {
                 setState(() => _selectedIndex = index);
               },

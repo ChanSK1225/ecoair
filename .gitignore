@@ -32,6 +32,10 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/test_artifacts/
+/otp_server/.env
+/otp_server/node_modules/
+/otp_server/.logs/
 
 # Symbolication related
 app.*.symbols

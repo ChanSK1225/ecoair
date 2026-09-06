@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/community_post.dart';
 import '../../providers/community_provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../theme/ecoair_theme.dart';
 import '../../widgets/ecoair_ui.dart';
 import 'create_post_screen.dart';
@@ -15,19 +16,6 @@ class CommunityScreen extends StatefulWidget {
 }
 
 class _CommunityScreenState extends State<CommunityScreen> {
-  bool _locationRequested = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_locationRequested) return;
-    _locationRequested = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<CommunityProvider>().refreshLocation();
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -41,9 +29,16 @@ class _CommunityScreenState extends State<CommunityScreen> {
               onRefresh: communityProvider.refreshLocation,
               color: EcoAirColors.primary,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 164),
                 children: [
                   _buildHeader(context),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'On-device reports - AQI badges use reference readings',
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                  if (communityProvider.loadError case final String error)
+                    Text(error, style: const TextStyle(color: Colors.red)),
                   const SizedBox(height: 16),
                   _buildLocationBanner(context, communityProvider),
                   if (communityProvider.locationError != null) ...[
@@ -57,11 +52,31 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   ],
                   const SizedBox(height: 20),
                   if (posts.isEmpty)
-                    const EcoAirEmptyState(
+                    EcoAirEmptyState(
                       icon: Icons.groups_outlined,
                       title: 'No nearby reports',
                       message:
                           'Create the first air quality or open burning report near you.',
+                      action: Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 10,
+                        runSpacing: 8,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const CreatePostScreen(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('Create Post'),
+                          ),
+                        ],
+                      ),
                     )
                   else
                     ...posts.map(
@@ -141,7 +156,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
     final statusText = communityProvider.isLocating
         ? 'Locating...'
         : communityProvider.usingDemoLocation
-        ? 'Segamat demo location · posts sorted by distance'
+        ? 'Segamat fallback location · tap Refresh for GPS'
         : 'Located · posts sorted by distance';
 
     return Container(
@@ -270,22 +285,39 @@ class _CommunityScreenState extends State<CommunityScreen> {
           const SizedBox(height: 18),
           Row(
             children: [
-              _buildAction(
-                Icons.favorite_border,
-                '${post.likes}',
-                () => communityProvider.likePost(post.id),
-              ),
-              const SizedBox(width: 20),
-              _buildAction(
-                Icons.chat_bubble_outline,
-                'Reply',
-                () => _showSnack(context, 'Reply feature is ready for demo.'),
-              ),
-              const SizedBox(width: 20),
-              _buildAction(
-                Icons.share_outlined,
-                'Share',
-                () => _showSnack(context, 'Post share preview prepared.'),
+              Builder(
+                builder: (context) {
+                  final userId = context.watch<AuthProvider>().userId ?? '';
+                  final liked = communityProvider.isPostLiked(post.id, userId);
+                  return TextButton.icon(
+                    key: ValueKey('like-${post.id}'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: liked
+                          ? Colors.red
+                          : const Color(0xFF64748B),
+                    ),
+                    onPressed: communityProvider.isLikePending(post.id)
+                        ? null
+                        : () async {
+                            try {
+                              await communityProvider.likePost(post.id, userId);
+                            } catch (_) {
+                              if (context.mounted) {
+                                showEcoAirSnackBar(
+                                  context,
+                                  'Could not save your like. Please try again.',
+                                  isError: true,
+                                );
+                              }
+                            }
+                          },
+                    icon: Icon(
+                      liked ? Icons.favorite : Icons.favorite_border,
+                      semanticLabel: liked ? 'Unlike post' : 'Like post',
+                    ),
+                    label: Text('${post.likes}'),
+                  );
+                },
               ),
             ],
           ),
@@ -324,30 +356,5 @@ class _CommunityScreenState extends State<CommunityScreen> {
         ],
       ),
     );
-  }
-
-  Widget _buildAction(IconData icon, String label, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 20, color: const Color(0xFF94A3B8)),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showSnack(BuildContext context, String message) {
-    showEcoAirSnackBar(context, message);
   }
 }

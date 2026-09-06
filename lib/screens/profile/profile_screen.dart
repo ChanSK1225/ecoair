@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../models/product.dart';
+
 import '../../providers/auth_provider.dart';
 import '../../providers/community_provider.dart';
 import '../../providers/store_provider.dart';
 import '../../providers/weather_provider.dart';
 import '../../theme/ecoair_theme.dart';
+import '../auth/change_password_screen.dart';
+import '../store/order_history_screen.dart';
+import 'notification_settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,37 +18,6 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  static const _notificationsKey = 'profileNotificationsEnabled';
-  static const _locationAlertsKey = 'profileLocationAlertsEnabled';
-  static const _alertThresholdKey = 'profileAlertThreshold';
-
-  bool _notificationsEnabled = true;
-  bool _locationAlertsEnabled = true;
-  double _alertThreshold = 100;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    setState(() {
-      _notificationsEnabled = prefs.getBool(_notificationsKey) ?? true;
-      _locationAlertsEnabled = prefs.getBool(_locationAlertsKey) ?? true;
-      _alertThreshold = prefs.getDouble(_alertThresholdKey) ?? 100;
-    });
-  }
-
-  Future<void> _saveSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_notificationsKey, _notificationsEnabled);
-    await prefs.setBool(_locationAlertsKey, _locationAlertsEnabled);
-    await prefs.setDouble(_alertThresholdKey, _alertThreshold);
-  }
-
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -57,108 +27,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final initial = (authProvider.userName?.isNotEmpty ?? false)
         ? authProvider.userName![0].toUpperCase()
         : 'U';
+    final postCount = communityProvider
+        .postsByAuthor(authProvider.userId ?? '')
+        .length;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 190),
         child: Column(
           children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 35,
-                    backgroundColor: EcoAirColors.primary,
-                    child: Text(
-                      initial,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          authProvider.userName ?? 'EcoAir User',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          authProvider.userEmail ?? 'user@ecoair.my',
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.teal[50],
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'EcoAir Member',
-                            style: TextStyle(
-                              color: EcoAirColors.primary,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            _buildProfileOverview(
+              initial: initial,
+              name: authProvider.userName ?? 'EcoAir User',
+              email: authProvider.userEmail ?? 'user@ecoair.my',
+              citiesTracked: weatherProvider.favoriteCities.length,
+              orders: storeProvider.orders.length,
+              posts: postCount,
             ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStat(
-                    '${weatherProvider.favoriteCities.length}',
-                    'Cities Tracked',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildStat('${storeProvider.orders.length}', 'Orders'),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildStat(
-                    '${communityProvider.posts.length}',
-                    'Posts',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-              ),
+            const SizedBox(height: 20),
+            Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
                   _buildMenuItem(
                     Icons.notifications_none,
                     'Notification Settings',
-                    () => _showNotificationSettings(context),
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const NotificationSettingsScreen(),
+                      ),
+                    ),
                   ),
                   _buildMenuItem(
                     Icons.location_on_outlined,
@@ -168,7 +70,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _buildMenuItem(
                     Icons.receipt_long_outlined,
                     'Order History',
-                    () => _showOrderHistory(context, storeProvider.orders),
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const OrderHistoryScreen(),
+                      ),
+                    ),
+                  ),
+                  _buildMenuItem(
+                    Icons.lock_reset,
+                    'Change Password',
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ChangePasswordScreen(),
+                      ),
+                    ),
                   ),
                   _buildMenuItem(
                     Icons.security_outlined,
@@ -176,7 +93,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     () => _showInfoDialog(
                       context,
                       'Privacy & Security',
-                      'EcoAir stores demo account, favorite cities, cart and order history locally on this device using SharedPreferences.',
+                      'Accounts and personal records are stored in SQLite on this device. Passwords and OTP records use salted hashes. Forgot Password uses a one-time email OTP flow for account reset; this coursework build displays the OTP on device unless an email service is connected. Exported files include location data; share only with trusted recipients. Uninstalling may remove local data. SQLite is not encrypted.',
                     ),
                   ),
                   _buildMenuItem(
@@ -216,104 +133,215 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildStat(String value, String label) {
+  Widget _buildProfileOverview({
+    required String initial,
+    required String name,
+    required String email,
+    required int citiesTracked,
+    required int orders,
+    required int posts,
+  }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: EcoAirColors.border.withValues(alpha: 0.7)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0D000000),
+            blurRadius: 20,
+            offset: Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: EcoAirColors.primary,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 74,
+                height: 74,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [EcoAirColors.primary, EcoAirColors.teal],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: EcoAirColors.primary.withValues(alpha: 0.22),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  initial,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      email,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: EcoAirColors.muted,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: EcoAirColors.mint,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text(
+                          'Local Account',
+                          style: TextStyle(
+                            color: EcoAirColors.primaryDark,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+          const SizedBox(height: 20),
+          Divider(height: 1, color: EcoAirColors.border.withValues(alpha: 0.8)),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: _buildProfileStat(
+                  Icons.location_on_outlined,
+                  '$citiesTracked',
+                  'Cities',
+                ),
+              ),
+              _buildProfileDivider(),
+              Expanded(
+                child: _buildProfileStat(
+                  Icons.receipt_long_outlined,
+                  '$orders',
+                  'Orders',
+                ),
+              ),
+              _buildProfileDivider(),
+              Expanded(
+                child: _buildProfileStat(
+                  Icons.forum_outlined,
+                  '$posts',
+                  'Posts',
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildMenuItem(IconData icon, String title, VoidCallback onTap) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.grey),
-      title: Text(title, style: const TextStyle(fontSize: 14)),
-      trailing: const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
-      onTap: onTap,
+  Widget _buildProfileStat(IconData icon, String value, String label) {
+    return Column(
+      children: [
+        Icon(icon, color: EcoAirColors.primary, size: 20),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+            color: EcoAirColors.primaryDark,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 11,
+            color: EcoAirColors.muted,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 
-  void _showNotificationSettings(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            void update(VoidCallback mutation) {
-              setSheetState(mutation);
-              setState(() {});
-              _saveSettings();
-            }
+  Widget _buildProfileDivider() {
+    return Container(
+      width: 1,
+      height: 54,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      color: EcoAirColors.border,
+    );
+  }
 
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Notification Settings',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('AQI notifications'),
-                      subtitle: const Text('Alert me when air quality changes'),
-                      value: _notificationsEnabled,
-                      onChanged: (value) =>
-                          update(() => _notificationsEnabled = value),
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Location-based alerts'),
-                      subtitle: const Text('Use saved locations for alerts'),
-                      value: _locationAlertsEnabled,
-                      onChanged: (value) =>
-                          update(() => _locationAlertsEnabled = value),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'AQI Alert Threshold: ${_alertThreshold.round()}',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Slider(
-                      value: _alertThreshold,
-                      min: 50,
-                      max: 200,
-                      divisions: 6,
-                      label: '${_alertThreshold.round()}',
-                      activeColor: EcoAirColors.primary,
-                      onChanged: (value) =>
-                          update(() => _alertThreshold = value),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+  Widget _buildMenuItem(IconData icon, String title, VoidCallback onTap) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+      leading: Container(
+        width: 38,
+        height: 38,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: EcoAirColors.background,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: EcoAirColors.primary, size: 20),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+      ),
+      trailing: Container(
+        width: 28,
+        height: 28,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border.all(color: EcoAirColors.border),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(
+          Icons.chevron_right,
+          size: 16,
+          color: EcoAirColors.softMuted,
+        ),
+      ),
+      onTap: onTap,
     );
   }
 
@@ -375,104 +403,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
-        );
-      },
-    );
-  }
-
-  void _showOrderHistory(BuildContext context, List<StoreOrder> orders) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    'Order History',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (orders.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Text('No protection store orders yet.'),
-                  )
-                else
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: orders.length,
-                      separatorBuilder: (context, index) =>
-                          const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final order = orders[index];
-                        return ListTile(
-                          leading: const CircleAvatar(
-                            backgroundColor: Color(0xFFE8F5E9),
-                            child: Icon(
-                              Icons.receipt_long,
-                              color: Color(0xFF0F9D58),
-                            ),
-                          ),
-                          title: Text(order.id),
-                          subtitle: Text(
-                            '${DateFormat('dd MMM yyyy').format(order.createdAt)} - ${order.itemCount} items',
-                          ),
-                          trailing: Text(
-                            'RM ${order.total.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              color: Color(0xFF0F9D58),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          onTap: () => _showOrderDetail(context, order),
-                        );
-                      },
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showOrderDetail(BuildContext context, StoreOrder order) {
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(order.id),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Status: ${order.status}'),
-              Text('Payment: ${order.paymentMethod}'),
-              Text('Delivery: ${order.deliveryAddress}'),
-              const SizedBox(height: 12),
-              ...order.items.map(
-                (item) => Text(
-                  '${item.quantity} x ${item.productName} - RM ${item.total.toStringAsFixed(2)}',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
         );
       },
     );

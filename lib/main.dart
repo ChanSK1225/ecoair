@@ -7,6 +7,7 @@ import 'providers/community_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main_layout.dart';
 import 'theme/ecoair_theme.dart';
+import 'services/otp_email_sender.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,22 +19,45 @@ void main() {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final OtpEmailSender otpEmailSender;
+  const MyApp({super.key, this.otpEmailSender = const OtpEmailSender()});
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => WeatherProvider()),
-        ChangeNotifierProvider(create: (_) => StoreProvider()),
-        ChangeNotifierProvider(create: (_) => CommunityProvider()),
-      ],
-      child: MaterialApp(
-        title: 'EcoAir Malaysia',
-        debugShowCheckedModeBanner: false,
-        theme: EcoAirTheme.light(),
-        home: const AuthWrapper(),
+    return ChangeNotifierProvider(
+      create: (_) => AuthProvider(otpEmailSender: otpEmailSender),
+      child: Consumer<AuthProvider>(
+        builder: (context, auth, _) => MultiProvider(
+          key: ValueKey('${auth.userId}:${auth.dataRevision}'),
+          providers: [
+            ChangeNotifierProvider(
+              create: (_) => WeatherProvider(
+                userId: auth.userId,
+                initialize: auth.isAuthenticated,
+              ),
+            ),
+            ChangeNotifierProvider(
+              create: (_) => StoreProvider(
+                userId: auth.userId,
+                initialize: auth.isAuthenticated,
+              ),
+            ),
+            ChangeNotifierProvider(
+              create: (_) => CommunityProvider(
+                userId: auth.userId,
+                initialize: auth.isAuthenticated,
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            // A session change must discard routes from the previous session.
+            key: ValueKey(auth.isAuthenticated),
+            title: 'EcoAir Malaysia',
+            debugShowCheckedModeBanner: false,
+            theme: EcoAirTheme.light(),
+            home: const AuthWrapper(),
+          ),
+        ),
       ),
     );
   }
@@ -46,6 +70,9 @@ class AuthWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
 
+    if (authProvider.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     if (authProvider.isAuthenticated) {
       return const MainLayout();
     } else {

@@ -1,14 +1,14 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../data/local/ecoair_database.dart';
 import '../models/community_post.dart';
 
 class CommunityProvider with ChangeNotifier {
   static const _postsPrefsKey = 'ecoairCommunityPosts';
+  static const _postsInitializedKey = 'community.postsInitialized';
   static const _demoLatitude = 2.4650;
   static const _demoLongitude = 102.9010;
   static const _malaysiaMinLatitude = 0.5;
@@ -17,11 +17,26 @@ class CommunityProvider with ChangeNotifier {
   static const _malaysiaMaxLongitude = 120.0;
 
   final List<CommunityPost> _posts = [];
+  final Map<String, Set<String>> _likedPosts = {};
+  final Set<String> _pendingLikes = {};
+  late final Future<void> ready;
   double? _userLatitude;
   double? _userLongitude;
   bool _isLocating = false;
   String? _locationError;
   bool _usingDemoLocation = true;
+
+  bool _disposed = false;
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
 
   List<CommunityPost> get posts => List.unmodifiable(_posts);
   double? get userLatitude => _userLatitude;
@@ -36,13 +51,45 @@ class CommunityProvider with ChangeNotifier {
     return _isMalaysiaCoordinate(latitude, longitude);
   }
 
-  CommunityProvider() {
+  final EcoAirDatabase _database;
+  String? loadError;
+
+  CommunityProvider({String? userId, bool initialize = true})
+    : _database = userId == null
+          ? EcoAirDatabase.instance
+          : EcoAirDatabase.forUser(userId) {
     _userLatitude = _demoLatitude;
     _userLongitude = _demoLongitude;
-    _loadSavedPosts();
+    ready = initialize ? _loadSavedPosts() : Future.value();
   }
 
   Future<void> _loadSavedPosts() async {
+    final database = EcoAirDatabase.instance;
+    try {
+      await database.removeRetiredCommunitySeed();
+      if (_database.userId != null) {
+        await database.ensureRegionalCommunitySeed();
+      }
+      _likedPosts.addAll(await database.loadCommunityLikes());
+      final savedPosts = await database.loadCommunityPosts();
+      final initialized =
+          await database.getBoolSetting(_postsInitializedKey) ?? false;
+      if (_database.userId != null || savedPosts.isNotEmpty || initialized) {
+        _posts
+          ..clear()
+          ..addAll(savedPosts);
+        notifyListeners();
+        return;
+      }
+    } catch (e) {
+      loadError = 'Reports could not be loaded. Please restart to retry.';
+      if (_database.userId != null) {
+        notifyListeners();
+        return;
+      }
+      debugPrint('Community database cache ignored: $e');
+    }
+
     final prefs = await SharedPreferences.getInstance();
     final encoded = prefs.getString(_postsPrefsKey);
 
@@ -60,19 +107,38 @@ class CommunityProvider with ChangeNotifier {
       _posts
         ..clear()
         ..addAll(
-          rows.map(
-            (row) =>
-                CommunityPost.fromJson(Map<String, dynamic>.from(row as Map)),
-          ),
+          rows
+              .map(
+                (row) => CommunityPost.fromJson(
+                  Map<String, dynamic>.from(row as Map),
+                ),
+              )
+              .where(
+                (post) => post.id != 'demo-hazard-1' || post.authorId != 'aina',
+              ),
         );
     } catch (e) {
       debugPrint('Community posts cache ignored: $e');
       _posts
         ..clear()
         ..addAll(_buildDemoPosts());
-      await _savePosts();
     }
+    await _savePosts();
+    notifyListeners();
+  }
 
+  Future<void> restoreDemoPosts() async {
+    await ready;
+    if (_database.userId != null) {
+      throw StateError(
+        'Seed report replacement is disabled for local accounts.',
+      );
+    }
+    _posts
+      ..clear()
+      ..addAll(_buildDemoPosts());
+    await _savePosts();
+    _likedPosts.clear();
     notifyListeners();
   }
 
@@ -105,20 +171,6 @@ class CommunityProvider with ChangeNotifier {
         authorId: 'sk',
         timestamp: now.subtract(const Duration(hours: 6)),
       ),
-      CommunityPost(
-        id: 'demo-hazard-1',
-        content:
-            'Open burning reported behind the workshop. The smell is strong near the residential area.',
-        location: 'Bandar Segamat, Johor, Malaysia',
-        latitude: 2.4738,
-        longitude: 102.8956,
-        aqiAtTime: 118,
-        aqiStatus: 'Unhealthy',
-        likes: 7,
-        authorName: 'Aina',
-        authorId: 'aina',
-        timestamp: now.subtract(const Duration(hours: 1)),
-      ),
     ];
   }
 
@@ -143,10 +195,12 @@ class CommunityProvider with ChangeNotifier {
         throw Exception('Location permission is denied.');
       }
 
-      final position = await Geolocator.getCurrentPosition();
+      final position = await Geolocator.getCurrentPosition().timeout(
+        const Duration(seconds: 20),
+      );
       if (!_isMalaysiaCoordinate(position.latitude, position.longitude)) {
         _useDemoLocation(
-          'Using Segamat demo location because emulator GPS is outside Malaysia.',
+          'Using Segamat fallback location because emulator GPS is outside Malaysia.',
         );
         return;
       }
@@ -156,7 +210,7 @@ class CommunityProvider with ChangeNotifier {
       _usingDemoLocation = false;
     } catch (e) {
       _useDemoLocation(
-        'Using Segamat demo location because GPS is unavailable.',
+        'Using Segamat fallback location because GPS is unavailable.',
       );
       debugPrint('Community location fallback used: $e');
     } finally {
@@ -168,7 +222,7 @@ class CommunityProvider with ChangeNotifier {
   void setUserLocation(double latitude, double longitude) {
     if (!_isMalaysiaCoordinate(latitude, longitude)) {
       _useDemoLocation(
-        'Using Segamat demo location because GPS returned a non-Malaysia coordinate.',
+        'Using Segamat fallback location because GPS returned a non-Malaysia coordinate.',
       );
       notifyListeners();
       return;
@@ -228,102 +282,79 @@ class CommunityProvider with ChangeNotifier {
     return '${(meters / 1000).toStringAsFixed(1)}km';
   }
 
-  List<CommunityPost> postsByAuthor(String authorName) {
-    final normalized = authorName.trim().toLowerCase();
+  List<CommunityPost> postsByAuthor(String authorId) {
+    final normalized = authorId.trim().toLowerCase();
     return _posts
-        .where((post) => post.authorName.trim().toLowerCase() == normalized)
+        .where((post) => post.authorId.trim().toLowerCase() == normalized)
         .toList()
       ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
   }
 
   Future<void> addPost(CommunityPost post) async {
+    await ready;
+    await _database.upsertCommunityPost(post);
+    await EcoAirDatabase.instance.setBoolSetting(_postsInitializedKey, true);
     _posts.insert(0, post);
-    await _savePosts();
     notifyListeners();
   }
 
   Future<void> updatePost(CommunityPost updatedPost) async {
+    await ready;
     final index = _posts.indexWhere((post) => post.id == updatedPost.id);
     if (index < 0) return;
+    updatedPost = updatedPost.copyWith(likes: _posts[index].likes);
+    await _database.upsertCommunityPost(updatedPost);
+    await EcoAirDatabase.instance.setBoolSetting(_postsInitializedKey, true);
     _posts[index] = updatedPost;
-    await _savePosts();
     notifyListeners();
   }
 
   Future<void> deletePost(String postId) async {
+    await ready;
+    await _database.deleteCommunityPost(postId);
+    await EcoAirDatabase.instance.setBoolSetting(_postsInitializedKey, true);
     _posts.removeWhere((post) => post.id == postId);
-    await _savePosts();
-    notifyListeners();
-  }
-
-  Future<void> likePost(String postId) async {
-    final index = _posts.indexWhere((post) => post.id == postId);
-    if (index < 0) return;
-
-    final post = _posts[index];
-    _posts[index] = post.copyWith(likes: post.likes + 1);
-    await _savePosts();
-    notifyListeners();
-  }
-
-  Future<File> exportPostsToCsv(List<CommunityPost> posts) async {
-    final directory = await getApplicationDocumentsDirectory();
-    final timestamp = DateTime.now()
-        .toIso8601String()
-        .replaceAll(':', '-')
-        .replaceAll('.', '-');
-    final file = File('${directory.path}/ecoair_contributions_$timestamp.csv');
-    final buffer = StringBuffer()
-      ..writeln(
-        [
-          'id',
-          'date',
-          'author',
-          'location',
-          'latitude',
-          'longitude',
-          'distance',
-          'aqi',
-          'status',
-          'likes',
-          'content',
-        ].join(','),
-      );
-
-    for (final post in posts) {
-      buffer.writeln(
-        [
-          post.id,
-          post.timestamp.toIso8601String(),
-          post.authorName,
-          post.location,
-          post.latitude?.toStringAsFixed(6) ?? '',
-          post.longitude?.toStringAsFixed(6) ?? '',
-          distanceLabel(post),
-          post.aqiAtTime,
-          post.aqiStatus,
-          post.likes,
-          post.content,
-        ].map(_csvEscape).join(','),
-      );
+    for (final liked in _likedPosts.values) {
+      liked.remove(postId);
     }
+    notifyListeners();
+  }
 
-    return file.writeAsString(buffer.toString(), flush: true);
+  bool isPostLiked(String postId, String userId) =>
+      _likedPosts[userId.trim().toLowerCase()]?.contains(postId) ?? false;
+
+  bool isLikePending(String postId) => _pendingLikes.contains(postId);
+
+  Future<void> likePost(String postId, String userId) async {
+    if (_pendingLikes.contains(postId) || userId.trim().isEmpty) return;
+    await ready;
+    final index = _posts.indexWhere((post) => post.id == postId);
+    if (index < 0 || _pendingLikes.contains(postId)) return;
+    _pendingLikes.add(postId);
+    notifyListeners();
+    try {
+      final normalized = userId.trim().toLowerCase();
+      final result = await _database.toggleCommunityLike(postId, normalized);
+      final currentIndex = _posts.indexWhere((post) => post.id == postId);
+      if (currentIndex >= 0) {
+        _posts[currentIndex] = _posts[currentIndex].copyWith(
+          likes: result.likes,
+        );
+      }
+      final liked = _likedPosts.putIfAbsent(normalized, () => <String>{});
+      result.liked ? liked.add(postId) : liked.remove(postId);
+    } finally {
+      _pendingLikes.remove(postId);
+      notifyListeners();
+    }
   }
 
   Future<void> _savePosts() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _postsPrefsKey,
-      jsonEncode(_posts.map((post) => post.toJson()).toList()),
-    );
-  }
-
-  String _csvEscape(Object? value) {
-    final text = (value ?? '').toString().replaceAll(RegExp(r'[\r\n]+'), ' ');
-    if (text.contains(',') || text.contains('"')) {
-      return '"${text.replaceAll('"', '""')}"';
+    try {
+      await EcoAirDatabase.instance.replaceCommunityPosts(_posts);
+      await EcoAirDatabase.instance.setBoolSetting(_postsInitializedKey, true);
+    } catch (e) {
+      debugPrint('Community database save failed: $e');
     }
-    return text;
   }
 }

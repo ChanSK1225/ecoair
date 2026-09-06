@@ -4,8 +4,10 @@ import '../../models/product.dart';
 import '../../providers/store_provider.dart';
 import '../../theme/ecoair_theme.dart';
 import '../../widgets/ecoair_ui.dart';
+import '../../widgets/product_visual.dart';
 import 'product_detail_screen.dart';
 import 'cart_screen.dart';
+import 'order_history_screen.dart';
 
 class StoreScreen extends StatefulWidget {
   const StoreScreen({super.key});
@@ -52,6 +54,14 @@ class _StoreScreenState extends State<StoreScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Order history',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const OrderHistoryScreen()),
+            ),
+            icon: const Icon(Icons.receipt_long_outlined),
+          ),
           IconButton(
             tooltip: 'Cart',
             onPressed: () {
@@ -138,7 +148,7 @@ class _StoreScreenState extends State<StoreScreen> {
                     builder: (context, constraints) {
                       final crossAxisCount = constraints.maxWidth > 720 ? 3 : 2;
                       return GridView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 132),
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 164),
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: crossAxisCount,
                           childAspectRatio: constraints.maxWidth > 720
@@ -212,27 +222,11 @@ class _StoreScreenState extends State<StoreScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Image.network(
-                  product.imageUrl,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: EcoAirColors.mint,
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.inventory_2_outlined,
-                        color: EcoAirColors.primary,
-                        size: 36,
-                      ),
-                    );
-                  },
+                child: EcoAirProductVisual(
+                  product: product,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
                 ),
               ),
               Padding(
@@ -252,15 +246,6 @@ class _StoreScreenState extends State<StoreScreen> {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.star, size: 12, color: Colors.amber),
-                        Text(
-                          ' ${product.rating}',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        const Spacer(),
                         Text(
                           '${product.stock} left',
                           style: const TextStyle(

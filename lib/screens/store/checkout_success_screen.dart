@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'order_history_screen.dart';
 import 'package:intl/intl.dart';
 import '../../models/product.dart';
 import '../../theme/ecoair_theme.dart';
@@ -14,68 +15,84 @@ class CheckoutSuccessScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: const BoxDecoration(
-                  color: EcoAirColors.mint,
-                  shape: BoxShape.circle,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: const BoxDecoration(
+                    color: EcoAirColors.mint,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_circle,
+                    color: EcoAirColors.primary,
+                    size: 80,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.check_circle,
-                  color: EcoAirColors.primary,
-                  size: 80,
+                const SizedBox(height: 32),
+                const Text(
+                  'Order Placed!',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
-              ),
-              const SizedBox(height: 32),
-              const Text(
-                'Payment Successful!',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Your protection order has been placed successfully.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 16),
-              ),
-              const SizedBox(height: 24),
-              EcoAirCard(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  children: [
-                    _buildRow('Order ID', order.id),
-                    const SizedBox(height: 8),
-                    _buildRow('Items', '${order.itemCount}'),
-                    const SizedBox(height: 8),
-                    _buildRow('Total', 'RM ${order.total.toStringAsFixed(2)}'),
-                    const SizedBox(height: 8),
-                    _buildRow(
-                      'Date',
-                      DateFormat(
-                        'dd MMM yyyy, hh:mm a',
-                      ).format(order.createdAt),
+                const SizedBox(height: 16),
+                const Text(
+                  'Your protection order has been placed successfully.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey, fontSize: 16),
+                ),
+                const SizedBox(height: 24),
+                EcoAirCard(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    children: [
+                      _buildRow('Order ID', order.id),
+                      const SizedBox(height: 8),
+                      _buildRow('Items', '${order.itemCount}'),
+                      const SizedBox(height: 8),
+                      _buildRow(
+                        'Total',
+                        'RM ${order.total.toStringAsFixed(2)}',
+                      ),
+                      const SizedBox(height: 8),
+                      _buildRow(
+                        'Date',
+                        DateFormat(
+                          'dd MMM yyyy, hh:mm a',
+                        ).format(order.createdAt),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 48),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => OrderTrackingScreen(orderId: order.id),
                     ),
-                  ],
+                  ),
+                  icon: const Icon(Icons.local_shipping_outlined),
+                  label: const Text('View delivery status'),
                 ),
-              ),
-              const SizedBox(height: 48),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.popUntil(context, (route) => route.isFirst);
-                },
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 54),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.popUntil(context, (route) => route.isFirst);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 54),
+                  ),
+                  child: const Text(
+                    'Back to Store',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
                 ),
-                child: const Text(
-                  'Back to Store',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

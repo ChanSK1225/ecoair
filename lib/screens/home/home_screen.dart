@@ -23,7 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _voiceChannel.invokeMethod<void>('stop');
+    _voiceChannel.invokeMethod<void>('stop').catchError((Object _) {});
     super.dispose();
   }
 
@@ -32,9 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final weatherProvider = Provider.of<WeatherProvider>(context);
     final authProvider = Provider.of<AuthProvider>(context);
     final currentCity = weatherProvider.currentCity;
-    final alertCount =
-        weatherProvider.weatherWarnings.length +
-        weatherProvider.apimsReadings.where((city) => city.aqi > 100).length;
+    final alertCount = weatherProvider.weatherWarnings.length;
     final initial = (authProvider.userName?.isNotEmpty ?? false)
         ? authProvider.userName![0].toUpperCase()
         : 'U';
@@ -137,10 +135,17 @@ class _HomeScreenState extends State<HomeScreen> {
         color: EcoAirColors.primary,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 128),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 160),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (weatherProvider.persistenceError case final String error)
+                EcoAirInlineMessage(
+                  icon: Icons.storage,
+                  title: 'Storage error',
+                  message: error,
+                  color: Colors.red,
+                ),
               if (weatherProvider.isLoading)
                 const Padding(
                   padding: EdgeInsets.only(bottom: 12),
@@ -172,98 +177,146 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 )
               else
-                EcoAirCard(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      Row(
+                Builder(
+                  builder: (context) {
+                    final forecast = weatherProvider.forecastFor(currentCity);
+                    return EcoAirCard(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
                         children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.location_on,
-                                  color: EcoAirColors.primary,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.location_on,
+                                      color: EcoAirColors.primary,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        '${currentCity.name}, ${currentCity.state}',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Refresh',
+                                onPressed: weatherProvider.isLoading
+                                    ? null
+                                    : weatherProvider.refreshData,
+                                icon: const Icon(
+                                  Icons.refresh,
+                                  size: 20,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              ElevatedButton.icon(
+                                onPressed: () =>
+                                    _showVoiceReport(context, currentCity),
+                                icon: const Icon(
+                                  Icons.volume_up_outlined,
                                   size: 18,
                                 ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    '${currentCity.name}, ${currentCity.state}',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                label: const Text('Voice'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: EcoAirColors.text,
+                                  elevation: 0,
+                                  side: BorderSide(color: Colors.grey[200]!),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Refresh',
-                            onPressed: weatherProvider.isLoading
-                                ? null
-                                : weatherProvider.refreshData,
-                            icon: const Icon(
-                              Icons.refresh,
-                              size: 20,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          ElevatedButton.icon(
-                            onPressed: () =>
-                                _showVoiceReport(context, currentCity),
-                            icon: const Icon(
-                              Icons.volume_up_outlined,
-                              size: 18,
-                            ),
-                            label: const Text('Voice'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: EcoAirColors.text,
-                              elevation: 0,
-                              side: BorderSide(color: Colors.grey[200]!),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
                               ),
-                            ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            WeatherProvider.aqiDataNote,
+                            style: TextStyle(fontSize: 11, color: Colors.grey),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 20),
+                          AQIGauge(
+                            aqi: currentCity.aqi,
+                            status: currentCity.status,
+                            color: currentCity.aqiColor,
+                          ),
+                          const SizedBox(height: 32),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _buildWeatherMetric(
+                                Icons.thermostat,
+                                _forecastTemperature(forecast, 'minTemp'),
+                                'Min Temp',
+                              ),
+                              _buildWeatherMetric(
+                                Icons.device_thermostat,
+                                _forecastTemperature(
+                                  forecast,
+                                  'maxTemp',
+                                  fallback: currentCity.temperature,
+                                ),
+                                'Max Temp',
+                              ),
+                            ],
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 20),
+                            child: Divider(height: 1),
+                          ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.wb_cloudy_outlined,
+                                color: EcoAirColors.primary,
+                                size: 24,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Weather Summary',
+                                      style: TextStyle(
+                                        color: EcoAirColors.muted,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _forecastSummary(forecast),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                      const SizedBox(height: 32),
-                      AQIGauge(
-                        aqi: currentCity.aqi,
-                        status: currentCity.status,
-                        color: currentCity.aqiColor,
-                      ),
-                      const SizedBox(height: 32),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildWeatherMetric(
-                            Icons.thermostat,
-                            '${currentCity.temperature.toInt()}\u00B0C',
-                            'Temp',
-                          ),
-                          _buildWeatherMetric(
-                            Icons.water_drop,
-                            '${currentCity.humidity.toInt()}%',
-                            'Humidity',
-                          ),
-                          _buildWeatherMetric(
-                            Icons.air,
-                            '${currentCity.windSpeed.toInt()} km/h',
-                            'Wind',
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               const SizedBox(height: 24),
               EcoAirSectionHeader(
                 title: 'Favorite Cities',
-                subtitle: 'Saved APIMS stations for quick monitoring',
+                subtitle: 'Saved monitoring stations',
                 trailing: TextButton.icon(
                   onPressed: () => _showAddCityDialog(context, weatherProvider),
                   icon: const Icon(Icons.add, size: 18),
@@ -307,12 +360,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showVoiceReport(BuildContext context, City city) {
+    final forecast = context.read<WeatherProvider>().forecastFor(city);
     final report =
-        '${city.name} air quality is ${city.status} with AQI ${city.aqi}. '
-        'Main pollutant is ${city.pollutant}. Temperature is '
-        '${city.temperature.toInt()}\u00B0C, humidity is '
-        '${city.humidity.toInt()}%, and wind speed is '
-        '${city.windSpeed.toInt()} km/h.';
+        'Air quality report for ${city.name}. AQI ${city.aqi}, ${city.status}. '
+        'Reference pollutant is ${city.pollutant}. Weather summary: '
+        '${_forecastSummary(forecast)}. Min temp '
+        '${_forecastTemperature(forecast, 'minTemp')}, max temp '
+        '${_forecastTemperature(forecast, 'maxTemp', fallback: city.temperature)}.';
 
     showModalBottomSheet<void>(
       context: context,
@@ -381,7 +435,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final availableCities = weatherProvider.apimsReadings
         .where(
           (city) => !weatherProvider.favoriteCities.any(
-            (favorite) => favorite.name == city.name,
+            (favorite) =>
+                favorite.name.trim().toLowerCase() ==
+                city.name.trim().toLowerCase(),
           ),
         )
         .toList();
@@ -533,17 +589,47 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  String _forecastTemperature(
+    Map<String, dynamic>? forecast,
+    String key, {
+    double? fallback,
+  }) {
+    final rawValue = forecast?[key];
+    final value = rawValue is num
+        ? rawValue.toDouble()
+        : double.tryParse('$rawValue');
+    final temperature = value != null && value > 0 ? value : fallback;
+    if (temperature == null || temperature <= 0) return '-';
+    return '${temperature.round()}\u00B0C';
+  }
+
+  String _forecastSummary(Map<String, dynamic>? forecast) {
+    final value = '${forecast?['summary'] ?? ''}'.trim();
+    if (value.isEmpty || value == '-') return 'Not available';
+    return value;
+  }
+
   Widget _buildWeatherMetric(IconData icon, String value, String label) {
-    return Column(
-      children: [
-        Icon(icon, color: EcoAirColors.primary, size: 24),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-      ],
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, color: EcoAirColors.primary, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: EcoAirColors.muted, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 
@@ -552,6 +638,7 @@ class _HomeScreenState extends State<HomeScreen> {
     City city,
     WeatherProvider provider,
   ) {
+    final forecast = provider.forecastFor(city);
     final isSelected =
         provider.currentCity?.name.trim().toLowerCase() ==
         city.name.trim().toLowerCase();
@@ -568,97 +655,152 @@ class _HomeScreenState extends State<HomeScreen> {
       borderColor: isSelected
           ? EcoAirColors.primary.withValues(alpha: 0.35)
           : EcoAirColors.border.withValues(alpha: 0.7),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.location_on_outlined, color: EcoAirColors.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  city.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                if (isSelected) ...[
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Selected on dashboard',
-                    style: TextStyle(
-                      color: EcoAirColors.primary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-                Text(
-                  city.state,
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.thermostat, size: 12, color: Colors.orange[300]),
-                    Text(
-                      ' ${city.temperature.toInt()}\u00B0C  ',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    Icon(Icons.water_drop, size: 12, color: Colors.blue[300]),
-                    Text(
-                      ' ${city.humidity.toInt()}%  ',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    Icon(Icons.air, size: 12, color: Colors.teal[300]),
-                    Text(
-                      ' ${city.windSpeed.toInt()} km/h',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
+              const Padding(
+                padding: EdgeInsets.only(top: 5),
+                child: Icon(
+                  Icons.location_on_outlined,
+                  color: EcoAirColors.primary,
                 ),
-                decoration: BoxDecoration(
-                  color: city.aqiColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${city.aqi}',
-                      style: TextStyle(
-                        color: city.aqiColor,
+                      city.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                        fontSize: 15,
                       ),
                     ),
-                    const Text(
-                      'AQI',
-                      style: TextStyle(fontSize: 10, color: Colors.grey),
+                    if (isSelected) ...[
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Selected on dashboard',
+                        style: TextStyle(
+                          color: EcoAirColors.primary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 2),
+                    Text(
+                      city.state,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                city.pollutant,
-                style: const TextStyle(fontSize: 10, color: Colors.grey),
+              const SizedBox(width: 8),
+              _buildAqiBadge(city),
+              IconButton(
+                tooltip: 'Remove city',
+                onPressed: () => _confirmRemoveCity(context, provider, city),
+                icon: Icon(Icons.delete_outline, color: Colors.grey[400]),
               ),
             ],
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'Remove city',
-            onPressed: () => _confirmRemoveCity(context, provider, city),
-            icon: Icon(Icons.delete_outline, color: Colors.grey[400]),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _compactMetric(
+                Icons.thermostat,
+                'Min ${_forecastTemperature(forecast, 'minTemp')}',
+                Colors.orange,
+              ),
+              _compactMetric(
+                Icons.device_thermostat,
+                'Max ${_forecastTemperature(forecast, 'maxTemp', fallback: city.temperature)}',
+                EcoAirColors.primary,
+              ),
+              _compactMetric(
+                Icons.wb_cloudy_outlined,
+                _forecastSummary(forecast),
+                Colors.teal,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAqiBadge(City city) {
+    return Column(
+      children: [
+        Container(
+          width: 48,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: city.aqiColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              Text(
+                '${city.aqi}',
+                style: TextStyle(
+                  color: city.aqiColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              const Text(
+                'AQI',
+                style: TextStyle(fontSize: 10, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          city.pollutant,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 10, color: Colors.grey),
+        ),
+      ],
+    );
+  }
+
+  Widget _compactMetric(IconData icon, String value, Color color) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 148),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: color.withValues(alpha: 0.92),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),

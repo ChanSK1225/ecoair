@@ -2,14 +2,15 @@ import 'dart:math';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+
 import 'package:provider/provider.dart';
 import '../../models/city.dart';
 import '../../providers/weather_provider.dart';
 import '../reports/report_export_screen.dart';
 
 class AnalyticsScreen extends StatefulWidget {
-  const AnalyticsScreen({super.key});
+  final String initialScope;
+  const AnalyticsScreen({super.key, this.initialScope = 'Malaysia'});
 
   @override
   State<AnalyticsScreen> createState() => _AnalyticsScreenState();
@@ -17,7 +18,7 @@ class AnalyticsScreen extends StatefulWidget {
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   static const _malaysiaScope = 'Malaysia';
-  String _selectedScope = _malaysiaScope;
+  late String _selectedScope = widget.initialScope;
 
   @override
   Widget build(BuildContext context) {
@@ -28,17 +29,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       _selectedScope = _malaysiaScope;
     }
     final readings = _readingsForScope(allReadings);
+    final isOverall = _selectedScope == _malaysiaScope;
+    final selectedCity = isOverall || readings.isEmpty ? null : readings.first;
+    final selectedForecast = selectedCity == null
+        ? null
+        : weatherProvider.forecastFor(selectedCity);
+    final cityAverages = _averageReadingsByCity(allReadings);
     final averageAqi = _averageAqi(readings);
     final maxAqi = readings.isEmpty
         ? 0
         : readings.map((city) => city.aqi).reduce(max);
     final goodCount = readings.where((city) => city.aqi <= 50).length;
     final unhealthyCount = readings.where((city) => city.aqi > 100).length;
-    final pollutantBreakdown = _pollutantBreakdown(readings);
-    final maxPollutantCount = pollutantBreakdown.isEmpty
-        ? 1
-        : pollutantBreakdown.values.reduce(max);
-    final updated = weatherProvider.lastUpdated;
 
     return Scaffold(
       appBar: AppBar(
@@ -50,9 +52,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             Text(
-              updated == null
-                  ? 'APIMS station insights'
-                  : 'Updated ${DateFormat('dd MMM, hh:mm a').format(updated)}',
+              'AQI - included stations only',
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
@@ -65,7 +65,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const ReportExportScreen(),
+                    builder: (context) =>
+                        ReportExportScreen(scope: _selectedScope),
                   ),
                 );
               },
@@ -86,94 +87,143 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         onRefresh: () => weatherProvider.refreshData(),
         child: allReadings.isEmpty
             ? ListView(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 128),
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 220),
                 children: [_buildEmptyState()],
               )
             : SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 136),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 220),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildScopeSelector(allReadings),
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            'Avg AQI',
-                            '$averageAqi',
-                            '${readings.length} stations',
-                            _aqiColor(averageAqi),
-                            Icons.analytics_outlined,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildStatCard(
-                            'Max AQI',
-                            '$maxAqi',
-                            unhealthyCount > 0
-                                ? '$unhealthyCount unhealthy'
-                                : 'No unhealthy',
-                            _aqiColor(maxAqi),
-                            Icons.warning_amber_outlined,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildStatCard(
-                            'Good Areas',
-                            '$goodCount',
-                            'AQI 0-50',
-                            Colors.green,
-                            Icons.eco_outlined,
-                          ),
-                        ),
-                      ],
+                    IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: isOverall
+                            ? [
+                                Expanded(
+                                  child: _buildStatCard(
+                                    'Avg AQI',
+                                    '$averageAqi',
+                                    '${readings.length} stations',
+                                    _aqiColor(averageAqi),
+                                    Icons.analytics_outlined,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _buildStatCard(
+                                    'Max AQI',
+                                    '$maxAqi',
+                                    unhealthyCount > 0
+                                        ? '$unhealthyCount unhealthy'
+                                        : 'No unhealthy',
+                                    _aqiColor(maxAqi),
+                                    Icons.warning_amber_outlined,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _buildStatCard(
+                                    'Good Areas',
+                                    '$goodCount',
+                                    'AQI 0-50',
+                                    Colors.green,
+                                    Icons.eco_outlined,
+                                  ),
+                                ),
+                              ]
+                            : [
+                                Expanded(
+                                  child: _buildStatCard(
+                                    'Min Temp',
+                                    _forecastTemperature(
+                                      selectedForecast,
+                                      'minTemp',
+                                    ),
+                                    'data.gov.my',
+                                    Colors.blue,
+                                    Icons.thermostat,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _buildStatCard(
+                                    'Max Temp',
+                                    _forecastTemperature(
+                                      selectedForecast,
+                                      'maxTemp',
+                                      fallback: selectedCity?.temperature,
+                                    ),
+                                    'forecast',
+                                    Colors.orange,
+                                    Icons.device_thermostat,
+                                  ),
+                                ),
+                              ],
+                      ),
                     ),
+                    if (!isOverall) ...[
+                      const SizedBox(height: 12),
+                      _buildRegionalWeatherSummary(selectedForecast),
+                    ],
                     const SizedBox(height: 24),
-                    _buildChartContainer(
-                      title: 'AQI Spread by Station',
-                      trailing: const Text(
-                        'Live station order',
-                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                    if (isOverall) ...[
+                      _buildChartContainer(
+                        title: 'Average AQI by City',
+                        trailing: const Text(
+                          'Station average',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                        child: SizedBox(
+                          height: 220,
+                          child: LineChart(_buildLineChart(cityAverages)),
+                        ),
                       ),
-                      child: SizedBox(
-                        height: 220,
-                        child: LineChart(_buildLineChart(readings)),
+                      const SizedBox(height: 24),
+                      _buildChartContainer(
+                        title: 'City Comparison',
+                        trailing: const Text(
+                          'Today',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                        child: SizedBox(
+                          height: 230,
+                          child: BarChart(_buildBarChart(cityAverages)),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildChartContainer(
-                      title: 'City Comparison',
-                      trailing: const Text(
-                        'Today',
-                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      const SizedBox(height: 24),
+                      _buildChartContainer(
+                        title: 'Weather Summary by Area',
+                        child: _buildWeatherSummaryList(
+                          weatherProvider,
+                          cityAverages.take(8).toList(),
+                        ),
                       ),
-                      child: SizedBox(
-                        height: 230,
-                        child: BarChart(_buildBarChart(readings)),
+                    ] else ...[
+                      _buildChartContainer(
+                        title: '${selectedCity!.name} AQI Snapshot',
+                        trailing: const Text(
+                          'Current reading',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                        child: _buildStationSnapshot(selectedCity),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildChartContainer(
-                      title: 'Pollutant Breakdown',
-                      child: Column(
-                        children: pollutantBreakdown.entries
-                            .map(
-                              (entry) => _buildPollutantRow(
-                                entry.key,
-                                entry.value,
-                                maxPollutantCount,
-                                _pollutantColor(entry.key),
-                              ),
-                            )
-                            .toList(),
+                      const SizedBox(height: 24),
+                      _buildChartContainer(
+                        title: 'Weather Forecast',
+                        trailing: const Text(
+                          'data.gov.my',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                        child: _buildForecastDetails(selectedForecast),
                       ),
-                    ),
+                    ],
                     const SizedBox(height: 24),
                     _buildInsightCard(readings, averageAqi, maxAqi),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
@@ -189,6 +239,257 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   List<City> _readingsForScope(List<City> allReadings) {
     if (_selectedScope == _malaysiaScope) return allReadings;
     return allReadings.where((city) => city.name == _selectedScope).toList();
+  }
+
+  List<City> _averageReadingsByCity(List<City> readings) {
+    final grouped = <String, List<City>>{};
+    for (final city in readings) {
+      grouped.putIfAbsent(city.name, () => []).add(city);
+    }
+    return grouped.entries.map((entry) {
+      final cities = entry.value;
+      final average = _averageAqi(cities);
+      return cities.first.copyWith(aqi: average, status: _aqiStatus(average));
+    }).toList()..sort((a, b) => b.aqi.compareTo(a.aqi));
+  }
+
+  String _forecastTemperature(
+    Map<String, dynamic>? forecast,
+    String key, {
+    double? fallback,
+  }) {
+    final rawValue = forecast?[key];
+    final value = rawValue is num
+        ? rawValue.toDouble()
+        : double.tryParse('$rawValue');
+    final temperature = value != null && value > 0 ? value : fallback;
+    if (temperature == null || temperature <= 0) return '-';
+    return '${temperature.round()}\u00B0C';
+  }
+
+  String _forecastSummary(Map<String, dynamic>? forecast) {
+    final value = '${forecast?['summary'] ?? ''}'.trim();
+    if (value.isEmpty || value == '-') return 'Not available';
+    return value;
+  }
+
+  String _forecastPart(Map<String, dynamic>? forecast, String key) {
+    final value = '${forecast?[key] ?? ''}'.trim();
+    if (value.isEmpty || value == '-') return 'Not available';
+    return value;
+  }
+
+  String _aqiStatus(int aqi) {
+    if (aqi <= 50) return 'Good';
+    if (aqi <= 100) return 'Moderate';
+    if (aqi <= 200) return 'Unhealthy';
+    if (aqi <= 300) return 'Very Unhealthy';
+    return 'Hazardous';
+  }
+
+  Widget _buildWeatherSummaryList(WeatherProvider provider, List<City> cities) {
+    return Column(
+      children: [
+        for (var i = 0; i < cities.length; i++) ...[
+          _buildWeatherSummaryRow(provider, cities[i]),
+          if (i != cities.length - 1)
+            Divider(height: 20, color: Colors.grey[200]),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildWeatherSummaryRow(WeatherProvider provider, City city) {
+    final forecast = provider.forecastFor(city);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: city.aqiColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            '${city.aqi}',
+            style: TextStyle(color: city.aqiColor, fontWeight: FontWeight.w800),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                city.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                '${_forecastTemperature(forecast, 'minTemp')} - ${_forecastTemperature(forecast, 'maxTemp', fallback: city.temperature)} · ${_forecastSummary(forecast)}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRegionalWeatherSummary(Map<String, dynamic>? forecast) {
+    return Container(
+      key: const ValueKey('analytics-regional-weather-summary'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.teal.withValues(alpha: 0.14)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.teal.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.wb_cloudy_outlined,
+              color: Colors.teal,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Weather Summary',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  _forecastSummary(forecast),
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    height: 1.28,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                const Text(
+                  'data.gov.my forecast for today',
+                  style: TextStyle(
+                    color: Colors.teal,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStationSnapshot(City city) {
+    return Row(
+      children: [
+        Container(
+          width: 76,
+          height: 76,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: city.aqiColor.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            '${city.aqi}',
+            style: TextStyle(
+              color: city.aqiColor,
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                city.status,
+                style: TextStyle(
+                  color: city.aqiColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${city.pollutant} reference reading · ${city.state}',
+                style: const TextStyle(color: Colors.grey, height: 1.35),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildForecastDetails(Map<String, dynamic>? forecast) {
+    return Column(
+      children: [
+        _buildForecastRow('Morning', _forecastPart(forecast, 'morning')),
+        Divider(height: 20, color: Colors.grey[200]),
+        _buildForecastRow('Afternoon', _forecastPart(forecast, 'afternoon')),
+        Divider(height: 20, color: Colors.grey[200]),
+        _buildForecastRow('Night', _forecastPart(forecast, 'night')),
+      ],
+    );
+  }
+
+  Widget _buildForecastRow(String label, String value) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 86,
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.grey, height: 1.35),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildScopeSelector(List<City> allReadings) {
@@ -259,13 +560,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         ),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         leftTitles: const AxisTitles(
-          sideTitles: SideTitles(showTitles: true, reservedSize: 34),
+          sideTitles: SideTitles(
+            showTitles: true,
+            reservedSize: 34,
+            maxIncluded: false,
+          ),
         ),
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,
             reservedSize: 32,
             getTitlesWidget: (value, meta) {
+              if (value != value.roundToDouble()) {
+                return const SizedBox.shrink();
+              }
               final index = value.toInt();
               if (index < 0 || index >= readings.length) {
                 return const SizedBox.shrink();
@@ -323,7 +631,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         ),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         leftTitles: const AxisTitles(
-          sideTitles: SideTitles(showTitles: true, reservedSize: 34),
+          sideTitles: SideTitles(
+            showTitles: true,
+            reservedSize: 34,
+            maxIncluded: false,
+          ),
         ),
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
@@ -365,26 +677,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Map<String, int> _pollutantBreakdown(List<City> readings) {
-    final counts = <String, int>{};
-    for (final city in readings) {
-      counts[city.pollutant] = (counts[city.pollutant] ?? 0) + 1;
-    }
-
-    return Map.fromEntries(
-      counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value)),
-    );
-  }
-
   Widget _buildStatCard(
     String title,
     String value,
     String note,
     Color accentColor,
-    IconData icon,
-  ) {
+    IconData icon, {
+    bool compactValue = false,
+  }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      key: ValueKey('analytics-stat-$title'),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -392,26 +695,38 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 16, color: accentColor),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+          SizedBox(
+            height: MediaQuery.textScalerOf(context).scale(12) * 2.6,
+            child: Row(
+              children: [
+                Icon(icon, size: 16, color: accentColor),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 2,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             value,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            maxLines: compactValue ? 2 : 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: compactValue ? 14 : 23,
+              fontWeight: FontWeight.bold,
+              height: compactValue ? 1.15 : null,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             note,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 10,
               color: accentColor,
@@ -437,8 +752,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
@@ -447,60 +762,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              ...?(trailing == null ? null : [trailing]),
+              if (trailing != null) ...[const SizedBox(height: 4), trailing],
             ],
           ),
           const SizedBox(height: 24),
           child,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPollutantRow(String name, int count, int maxCount, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 58,
-            child: Text(
-              name,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-          ),
-          Expanded(
-            child: Stack(
-              children: [
-                Container(
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                FractionallySizedBox(
-                  widthFactor: min(1, count / maxCount),
-                  child: Container(
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 58,
-            child: Text(
-              '$count station${count == 1 ? '' : 's'}',
-              textAlign: TextAlign.end,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-            ),
-          ),
         ],
       ),
     );
@@ -591,24 +857,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Color _aqiColor(int aqi) {
     if (aqi <= 50) return Colors.green;
     if (aqi <= 100) return Colors.yellow[700]!;
-    if (aqi <= 150) return Colors.orange;
-    if (aqi <= 200) return Colors.red;
-    if (aqi <= 300) return Colors.purple;
-    return Colors.brown;
-  }
-
-  Color _pollutantColor(String pollutant) {
-    switch (pollutant.toUpperCase()) {
-      case 'PM2.5':
-        return Colors.orange;
-      case 'PM10':
-        return Colors.yellow[700]!;
-      case 'NO2':
-        return Colors.teal;
-      case 'O3':
-        return Colors.blue;
-      default:
-        return const Color(0xFF0F9D58);
-    }
+    if (aqi <= 200) return Colors.orange;
+    if (aqi <= 300) return Colors.red;
+    return Colors.purple;
   }
 }

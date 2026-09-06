@@ -1,239 +1,272 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../theme/ecoair_theme.dart';
-import '../../widgets/ecoair_ui.dart';
+import 'auth_ui.dart';
+import 'forgot_password_screen.dart';
 import 'register_screen.dart';
-import 'reset_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
-
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _isLoading = false;
-
+  final _form = GlobalKey<FormState>();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  bool _busy = false;
+  bool _submitted = false;
+  bool _obscure = true;
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _email.dispose();
+    _password.dispose();
     super.dispose();
   }
 
-  Future<void> _handleEmailLogin() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-    if (!_isValidEmail(email)) {
-      showEcoAirSnackBar(context, 'Please enter a valid email.', isError: true);
-      return;
-    }
-    if (password.trim().isEmpty) {
-      showEcoAirSnackBar(context, 'Please enter your password.', isError: true);
-      return;
-    }
-
-    setState(() => _isLoading = true);
+  Future<void> _login() async {
+    if (_busy) return;
+    setState(() => _submitted = true);
+    if (!_form.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _busy = true);
     try {
-      await Provider.of<AuthProvider>(
-        context,
-        listen: false,
-      ).login(email, password);
+      await context.read<AuthProvider>().login(_email.text, _password.text);
     } catch (e) {
-      if (!mounted) return;
-      showEcoAirSnackBar(context, friendlyError(e), isError: true);
+      if (mounted) {
+        setState(() => _busy = false);
+        await showAuthError(context, e);
+      }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _handleGoogleLogin() async {
-    setState(() => _isLoading = true);
-    try {
-      await Provider.of<AuthProvider>(
-        context,
-        listen: false,
-      ).login('google.user@ecoair.my', 'google-demo');
-    } catch (e) {
-      if (!mounted) return;
-      showEcoAirSnackBar(context, friendlyError(e), isError: true);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  bool _isValidEmail(String email) {
-    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
+  Future<void> _open(Widget screen) async {
+    if (_busy) return;
+    final email = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => screen),
+    );
+    if (!mounted) return;
+    if (email != null) _email.text = email;
+    _password.clear();
+    setState(() => _submitted = false);
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: EcoAirColors.primary,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(Icons.air, color: Colors.white, size: 32),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Welcome back',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Log in to your account',
-                style: TextStyle(color: Colors.grey),
-              ),
-              const SizedBox(height: 48),
-
-              // Google Login
-              OutlinedButton.icon(
-                onPressed: _isLoading ? null : _handleGoogleLogin,
-                icon: const Icon(
-                  Icons.account_circle_outlined,
-                  color: Colors.black,
-                ),
-                label: const Text(
-                  'Continue with Google',
-                  style: TextStyle(color: Colors.black),
-                ),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 50),
-                  side: BorderSide(color: Colors.grey[300]!),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-              const Row(
-                children: [
-                  Expanded(child: Divider()),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text(
-                      'OR',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                  ),
-                  Expanded(child: Divider()),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              Align(
-                alignment: Alignment.centerLeft,
-                child: const Text(
-                  'Email',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _emailController,
-                decoration: InputDecoration(
-                  hintText: 'you@example.com',
-                  prefixIcon: const Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Password',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const ResetPasswordScreen(),
-                        ),
-                      );
-                    },
-                    child: const Text(
-                      'Forgot password?',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  hintText: '••••••••',
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              ElevatedButton(
-                onPressed: _isLoading ? null : _handleEmailLogin,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 50),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Text('Log in'),
-              ),
-
-              const SizedBox(height: 24),
-              Row(
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_busy,
+    child: Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: EdgeInsets.all(_compactLayout(context) ? 18 : 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text("Don't have an account? "),
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const RegisterScreen(),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF059669),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF059669).withValues(alpha: 0.2),
+                          blurRadius: 18,
+                          offset: const Offset(0, 10),
                         ),
-                      );
-                    },
-                    child: const Text(
-                      'Create one',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        decoration: TextDecoration.underline,
+                      ],
+                    ),
+                    child: const Icon(Icons.air, color: Colors.white, size: 32),
+                  ),
+                  SizedBox(height: _compactLayout(context) ? 16 : 24),
+                  const Text(
+                    'Welcome back',
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Log in to your account',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  SizedBox(height: _compactLayout(context) ? 28 : 56),
+                  if (context.watch<AuthProvider>().error
+                      case final String error)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Text(
+                        error,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  AutofillGroup(
+                    child: Form(
+                      key: _form,
+                      autovalidateMode: _submitted
+                          ? AutovalidateMode.onUserInteraction
+                          : AutovalidateMode.disabled,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildLabel('Email'),
+                          TextFormField(
+                            controller: _email,
+                            enabled: !_busy,
+                            validator: validateAuthEmail,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            autofillHints: const [AutofillHints.username],
+                            autocorrect: false,
+                            decoration: _loginInput(
+                              hint: 'name@example.com',
+                              icon: Icons.email_outlined,
+                            ),
+                          ),
+                          SizedBox(height: _compactLayout(context) ? 10 : 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Password',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              TextButton(
+                                onPressed: _busy
+                                    ? null
+                                    : () => _open(
+                                        ForgotPasswordScreen(
+                                          initialEmail: _email.text,
+                                        ),
+                                      ),
+                                child: const Text(
+                                  'Forgot password?',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                          TextFormField(
+                            controller: _password,
+                            enabled: !_busy,
+                            obscureText: _obscure,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            autofillHints: const [AutofillHints.password],
+                            textInputAction: TextInputAction.done,
+                            validator: validateAuthPassword,
+                            onFieldSubmitted: (_) => _login(),
+                            decoration:
+                                _loginInput(
+                                  hint: 'Enter your password',
+                                  icon: Icons.lock_outline,
+                                ).copyWith(
+                                  suffixIcon: IconButton(
+                                    tooltip: _obscure
+                                        ? 'Show password'
+                                        : 'Hide password',
+                                    onPressed: _busy
+                                        ? null
+                                        : () => setState(() {
+                                            _obscure = !_obscure;
+                                          }),
+                                    icon: Icon(
+                                      _obscure
+                                          ? Icons.visibility_outlined
+                                          : Icons.visibility_off_outlined,
+                                    ),
+                                  ),
+                                ),
+                          ),
+                          SizedBox(height: _compactLayout(context) ? 16 : 24),
+                          SizedBox(
+                            height: 52,
+                            child: ElevatedButton(
+                              onPressed: _busy ? null : _login,
+                              child: _busy
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text('Log in'),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
+                  SizedBox(height: _compactLayout(context) ? 12 : 24),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      const Text("Don't have an account? "),
+                      TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () => _open(const RegisterScreen()),
+                        child: const Text(
+                          'Create one',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
+        ),
+      ),
+    ),
+  );
+
+  bool _compactLayout(BuildContext context) {
+    return MediaQuery.sizeOf(context).height < 700;
+  }
+
+  Widget _buildLabel(String text) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  InputDecoration _loginInput({required String hint, required IconData icon}) {
+    return InputDecoration(
+      hintText: hint,
+      prefixIcon: Icon(icon),
+      errorMaxLines: 3,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: Colors.grey[300]!),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFF059669), width: 1.4),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.error),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.error,
+          width: 1.4,
         ),
       ),
     );

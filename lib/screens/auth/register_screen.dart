@@ -1,244 +1,207 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../theme/ecoair_theme.dart';
-import '../../widgets/ecoair_ui.dart';
+import 'auth_ui.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
-
+  final String initialEmail;
+  const RegisterScreen({super.key, this.initialEmail = ''});
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmController = TextEditingController();
-  bool _isLoading = false;
-
+  final _form = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  late final _email = TextEditingController(text: widget.initialEmail);
+  final _password = TextEditingController();
+  final _confirm = TextEditingController();
+  bool _busy = false;
+  bool _working = false;
+  bool _submitted = false;
+  bool _complete = false;
+  String? _emailError;
+  bool get _dirty =>
+      !_complete &&
+      (_email.text != widget.initialEmail ||
+          [_name, _password, _confirm].any((c) => c.text.isNotEmpty));
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    _confirmController.dispose();
+    for (final c in [_name, _email, _password, _confirm]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
-  Future<void> _handleEmailRegister() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-    final confirm = _confirmController.text;
-    if (!_isValidEmail(email)) {
-      showEcoAirSnackBar(context, 'Please enter a valid email.', isError: true);
-      return;
-    }
-    if (password.length < 6) {
-      showEcoAirSnackBar(
+  Future<void> _register() async {
+    if (_busy) return;
+    setState(() => _submitted = true);
+    if (!_form.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _busy = true;
+      _working = true;
+    });
+    try {
+      await context.read<AuthProvider>().checkRegistrationEmail(_email.text);
+      if (!mounted) return;
+      setState(() => _working = false);
+      final confirmed = await confirmAuthAction(
         context,
-        'Password must be at least 6 characters.',
-        isError: true,
+        title: 'Create local account?',
+        message:
+            'Create an account for ${_email.text.trim()} on this device? Your data is saved locally, not synced online.',
+        action: 'Create account',
       );
-      return;
-    }
-    if (password != confirm) {
-      showEcoAirSnackBar(context, 'Passwords do not match.', isError: true);
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    final navigator = Navigator.of(context);
-    try {
-      await Provider.of<AuthProvider>(
-        context,
-        listen: false,
-      ).register(email, password);
-      if (mounted) navigator.pop();
-    } catch (e) {
+      if (!mounted || !confirmed) return;
+      setState(() => _working = true);
+      await context.read<AuthProvider>().register(
+        _email.text,
+        _password.text,
+        name: _name.text,
+        startSession: false,
+      );
+      _complete = true;
       if (!mounted) return;
-      showEcoAirSnackBar(context, friendlyError(e), isError: true);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _handleGoogleRegister() async {
-    setState(() => _isLoading = true);
-    final navigator = Navigator.of(context);
-    try {
-      await Provider.of<AuthProvider>(
+      setState(() => _working = false);
+      await showAuthNotice(
         context,
-        listen: false,
-      ).register('google.user@ecoair.my', 'google-demo');
-      if (mounted) navigator.pop();
-    } catch (e) {
+        title: 'Account created',
+        message:
+            'Your EcoAir account is ready.\nLog in with your email and password to continue.',
+        action: 'Back to log in',
+      );
       if (!mounted) return;
-      showEcoAirSnackBar(context, friendlyError(e), isError: true);
+      setState(() => _busy = false);
+      await WidgetsBinding.instance.endOfFrame;
+      if (mounted) Navigator.pop(context, _email.text.trim());
+    } on EmailAlreadyRegisteredException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _working = false;
+        _emailError = 'Email already registered. Log in instead.';
+      });
+      _form.currentState?.validate();
+      final logIn = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AuthDialog(
+          icon: Icons.person_outline,
+          title: 'Email already registered',
+          message:
+              '${e.email} already has an account on this device. Log in with your existing password, or use Forgot password.',
+          action: 'Back to log in',
+          onAction: () => Navigator.pop(dialogContext, true),
+          onCancel: () => Navigator.pop(dialogContext, false),
+        ),
+      );
+      if (!mounted || logIn != true) return;
+      setState(() {
+        _complete = true;
+        _busy = false;
+      });
+      await WidgetsBinding.instance.endOfFrame;
+      if (mounted) Navigator.pop(context, e.email);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _working = false);
+        await showAuthError(context, e);
+      }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _busy = false);
     }
-  }
-
-  bool _isValidEmail(String email) {
-    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+  Widget build(BuildContext context) => AuthLeaveGuard(
+    dirty: _dirty,
+    busy: _busy,
+    child: AuthPage(
+      title: 'Create your account',
+      subtitle: 'Your EcoAir account stays on this device.',
+      busy: _busy,
+      children: [
+        Form(
+          key: _form,
+          onChanged: () => setState(() {}),
+          autovalidateMode: _submitted
+              ? AutovalidateMode.onUserInteraction
+              : AutovalidateMode.disabled,
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: EcoAirColors.primary,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.person_add,
-                  color: Colors.white,
-                  size: 32,
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Create your account',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Sign up to get started',
-                style: TextStyle(color: Colors.grey),
-              ),
-              const SizedBox(height: 48),
-
-              OutlinedButton.icon(
-                onPressed: _isLoading ? null : _handleGoogleRegister,
-                icon: const Icon(
-                  Icons.account_circle_outlined,
-                  color: Colors.black,
-                ),
-                label: const Text(
-                  'Continue with Google',
-                  style: TextStyle(color: Colors.black),
-                ),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 50),
-                  side: BorderSide(color: Colors.grey[300]!),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+              TextFormField(
+                controller: _name,
+                enabled: !_busy,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.name],
+                textCapitalization: TextCapitalization.words,
+                validator: (v) => (v ?? '').trim().isEmpty
+                    ? 'Enter your name.'
+                    : v!.trim().length > 50
+                    ? 'Use up to 50 characters.'
+                    : null,
+                decoration: authInput(
+                  'Name',
+                  'Your name',
+                  Icons.person_outline,
                 ),
               ),
-
-              const SizedBox(height: 24),
-              const Row(
-                children: [
-                  Expanded(child: Divider()),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text(
-                      'OR',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                  ),
-                  Expanded(child: Divider()),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              _buildLabel('Email'),
-              TextField(
-                controller: _emailController,
-                decoration: _buildInputDecoration(
-                  'you@example.com',
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _email,
+                enabled: !_busy,
+                validator: (value) => validateAuthEmail(value) ?? _emailError,
+                onChanged: (_) {
+                  if (_emailError != null) setState(() => _emailError = null);
+                },
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autocorrect: false,
+                autofillHints: const [AutofillHints.email],
+                decoration: authInput(
+                  'Email',
+                  'name@example.com',
                   Icons.email_outlined,
                 ),
               ),
-              const SizedBox(height: 16),
-
-              _buildLabel('Password'),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: _buildInputDecoration(
-                  '••••••••',
-                  Icons.lock_outline,
-                ),
+              const SizedBox(height: 20),
+              AuthPasswordField(
+                controller: _password,
+                enabled: !_busy,
+                hint: 'Create a password',
+                helper: '8-12 chars, upper/lower, number & symbol',
+                validator: (v) => validateAuthPassword(v, newPassword: true),
               ),
-              const SizedBox(height: 16),
-
-              _buildLabel('Confirm Password'),
-              TextField(
-                controller: _confirmController,
-                obscureText: true,
-                decoration: _buildInputDecoration(
-                  '••••••••',
-                  Icons.lock_outline,
-                ),
+              const SizedBox(height: 20),
+              AuthPasswordField(
+                controller: _confirm,
+                enabled: !_busy,
+                label: 'Confirm password',
+                hint: 'Repeat your password',
+                validator: (v) => (v ?? '').isEmpty
+                    ? 'Confirm your password.'
+                    : v != _password.text
+                    ? 'Passwords do not match.'
+                    : null,
+                action: TextInputAction.done,
+                onSubmit: _register,
               ),
-              const SizedBox(height: 24),
-
-              ElevatedButton(
-                onPressed: _isLoading ? null : _handleEmailRegister,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 50),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Text('Create account'),
-              ),
-
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text("Already have an account? "),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Text(
-                      'Log in',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        decoration: TextDecoration.underline,
-                      ),
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 28),
+              AuthSubmitButton(
+                label: 'Create account',
+                busy: _busy,
+                working: _working,
+                onPressed: _register,
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildLabel(String text) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 8.0),
-        child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
-      ),
-    );
-  }
-
-  InputDecoration _buildInputDecoration(String hint, IconData icon) {
-    return InputDecoration(
-      hintText: hint,
-      prefixIcon: Icon(icon),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-    );
-  }
+        const SizedBox(height: 16),
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.maybePop(context),
+          child: const Text('Back to log in'),
+        ),
+      ],
+    ),
+  );
 }

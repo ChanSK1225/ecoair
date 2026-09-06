@@ -7,6 +7,7 @@ class AirAlert {
   final int aqiValue;
   final bool isRead;
   final DateTime timestamp;
+  final DateTime? validUntil;
 
   AirAlert({
     required this.title,
@@ -17,6 +18,7 @@ class AirAlert {
     required this.aqiValue,
     this.isRead = false,
     required this.timestamp,
+    this.validUntil,
   });
 
   Map<String, dynamic> toJson() {
@@ -29,6 +31,7 @@ class AirAlert {
       'aqiValue': aqiValue,
       'isRead': isRead,
       'timestamp': timestamp.toIso8601String(),
+      'validUntil': validUntil?.toIso8601String(),
     };
   }
 
@@ -41,6 +44,7 @@ class AirAlert {
       city: json['city'] as String,
       aqiValue: json['aqiValue'] as int? ?? 0,
       isRead: json['isRead'] as bool? ?? false,
+      validUntil: DateTime.tryParse('${json['validUntil'] ?? ''}'),
       timestamp:
           DateTime.tryParse(json['timestamp'] as String? ?? '') ??
           DateTime.now(),

@@ -23,8 +23,8 @@ class AlertsScreen extends StatelessWidget {
             ),
             Text(
               warnings.isEmpty
-                  ? 'Sample alerts + APIMS AQI warning'
-                  : '${warnings.length} live weather warnings',
+                  ? 'Weather advisories'
+                  : '${warnings.length} weather advisories',
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
@@ -68,6 +68,7 @@ class AlertsScreen extends StatelessWidget {
                 (alert) => Padding(
                   padding: const EdgeInsets.only(bottom: 16),
                   child: _buildAlertCard(
+                    context,
                     alert.title,
                     alert.message,
                     alert.severity,
@@ -76,48 +77,13 @@ class AlertsScreen extends StatelessWidget {
                   ),
                 ),
               )
-            else ...[
-              _buildAlertCard(
-                'Warning on Thunderstorms',
-                'Thunderstorms, heavy rain and strong winds are expected over the waters of Perlis & Kedah, Penang, Perak and Western Sabah and Labuan, Eastern Sabah until 1:00AM; Friday, 17 July 2026.',
-                'High',
-                Colors.orange[900]!,
-                Colors.orange[50]!,
+            else
+              const EcoAirInlineMessage(
+                icon: Icons.check_circle_outline,
+                title: 'No weather advisories to display',
+                message:
+                    'Refresh for the latest MET Malaysia weather warnings.',
               ),
-              const SizedBox(height: 16),
-              _buildAlertCard(
-                'Warning on Thunderstorms',
-                'Thunderstorms, heavy rain and strong winds are expected over the waters of eastern part of Phuket, Northern Straits of Melaka, Samui, southwestern part of Condore, southern part of Reef North, northern part of Reef South and Labuan until 1:00AM; Friday, 17 July 2026.',
-                'High',
-                Colors.orange[900]!,
-                Colors.orange[50]!,
-              ),
-              const SizedBox(height: 16),
-              _buildAlertCard(
-                'Thunderstorms Warning',
-                'Thunderstorms, heavy rain and strong winds are expected over the states of Kedah (Kubang Pasu, Kota Setar, Pokok Sena and Padang Terap); Perak (Larut, Matang and Selama, Hulu Perak, Kuala Kangsar, Manjung, Kinta, Perak Tengah, Kampar, Batang Padang and Muallim); Kelantan (Gua Musang); Pahang (Cameron Highlands and Lipis); Negeri Sembilan (Jelebu, Seremban and Jempol); Sabah: Sandakan (Kinabatangan and Sandakan); and FT Labuan until 3:00AM; Friday, 17 July 2026.',
-                'High',
-                Colors.orange[900]!,
-                Colors.orange[50]!,
-              ),
-              const SizedBox(height: 16),
-              _buildAlertCard(
-                'No Advisory',
-                'No Tropical Cyclone system is observed under MMD monitoring region (Latitude: 0-20 North & Longitude: 95-130 East)',
-                'Medium',
-                Colors.amber[800]!,
-                Colors.amber[50]!,
-              ),
-              const SizedBox(height: 16),
-            ],
-            _buildAlertCard(
-              'Hazardous AQI Level',
-              'AQI level in your current location has reached hazardous levels. Please stay indoors.',
-              'Critical',
-              Colors.red[900]!,
-              Colors.red[50]!,
-              aqiValue: 210,
-            ),
           ],
         ),
       ),
@@ -125,6 +91,7 @@ class AlertsScreen extends StatelessWidget {
   }
 
   Widget _buildAlertCard(
+    BuildContext context,
     String title,
     String message,
     String severity,
@@ -132,7 +99,12 @@ class AlertsScreen extends StatelessWidget {
     Color bgColor, {
     int? aqiValue,
   }) {
-    final normalizedMessage = message.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final normalizedMessage = _normalizeWarningMessage(message);
+    final paragraphs = _warningParagraphs(normalizedMessage);
+    final isLongMessage = normalizedMessage.length > 520;
+    final previewParagraphs = isLongMessage
+        ? paragraphs.take(3).toList()
+        : paragraphs;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -202,15 +174,33 @@ class AlertsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Text(
-            normalizedMessage,
-            softWrap: true,
-            style: TextStyle(
-              color: textColor.withValues(alpha: 0.7),
-              fontSize: 13,
-              height: 1.5,
-            ),
+          _buildWarningText(
+            previewParagraphs,
+            textColor,
+            truncateLastParagraph: isLongMessage,
           ),
+          if (isLongMessage) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _showAlertDetails(
+                  context,
+                  title,
+                  paragraphs,
+                  severity,
+                  textColor,
+                ),
+                icon: const Icon(Icons.open_in_full_outlined, size: 16),
+                label: const Text('View full warning'),
+                style: TextButton.styleFrom(
+                  foregroundColor: textColor,
+                  padding: EdgeInsets.zero,
+                  textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           Text(
             'Malaysia',
@@ -222,5 +212,125 @@ class AlertsScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _showAlertDetails(
+    BuildContext context,
+    String title,
+    List<String> paragraphs,
+    String severity,
+    Color accentColor,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.84,
+            ),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.cloud_outlined, color: accentColor),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Chip(
+                    label: Text(severity),
+                    backgroundColor: accentColor.withValues(alpha: 0.12),
+                    labelStyle: TextStyle(
+                      color: accentColor,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildWarningText(
+                  paragraphs,
+                  EcoAirColors.text,
+                  fontSize: 14,
+                  lineHeight: 1.55,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildWarningText(
+    List<String> paragraphs,
+    Color color, {
+    bool truncateLastParagraph = false,
+    double fontSize = 13,
+    double lineHeight = 1.5,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: paragraphs.asMap().entries.map((entry) {
+        final isLast = entry.key == paragraphs.length - 1;
+        return Padding(
+          padding: EdgeInsets.only(top: entry.key == 0 ? 0 : 12),
+          child: Text(
+            entry.value,
+            softWrap: true,
+            maxLines: truncateLastParagraph && isLast ? 4 : null,
+            overflow: truncateLastParagraph && isLast
+                ? TextOverflow.ellipsis
+                : null,
+            style: TextStyle(
+              color: color.withValues(alpha: 0.78),
+              fontSize: fontSize,
+              height: lineHeight,
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  String _normalizeWarningMessage(String message) {
+    return message.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  List<String> _warningParagraphs(String message) {
+    var prepared = _normalizeWarningMessage(message);
+    prepared = prepared.replaceAllMapped(
+      RegExp(r'\s+(SECTION [A-Z]:)'),
+      (match) => '\n\n${match.group(1)}',
+    );
+    prepared = prepared.replaceAllMapped(
+      RegExp(r'\s+([0-9]\)\s+)'),
+      (match) => '\n\n${match.group(1)}',
+    );
+    prepared = prepared.replaceAllMapped(
+      RegExp(r'\.\s+([A-Z])'),
+      (match) => '.\n\n${match.group(1)}',
+    );
+
+    final paragraphs = prepared
+        .split(RegExp(r'\n{2,}'))
+        .map((paragraph) => paragraph.trim())
+        .where((paragraph) => paragraph.isNotEmpty)
+        .toList();
+    return paragraphs.isEmpty ? [message] : paragraphs;
   }
 }

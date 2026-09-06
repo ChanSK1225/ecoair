@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/community_post.dart';
@@ -26,6 +28,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final _locationController = TextEditingController();
   final _picker = ImagePicker();
   File? _imageFile;
+  bool _imageRemoved = false;
   double? _latitude;
   double? _longitude;
   bool _isLocating = false;
@@ -56,9 +59,30 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Future<void> _pickImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile == null) return;
-    setState(() => _imageFile = File(pickedFile.path));
+    try {
+      final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+      if (pickedFile == null || !mounted) return;
+      final directory = await getApplicationDocumentsDirectory();
+      final saved = await File(pickedFile.path).copy(
+        path.join(
+          directory.path,
+          'post-${const Uuid().v4()}${path.extension(pickedFile.path)}',
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _imageFile = saved;
+          _imageRemoved = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        _showSnack(
+          'Could not load the photo. Please try again.',
+          isError: true,
+        );
+      }
+    }
   }
 
   Future<void> _getGpsLocation() async {
@@ -81,7 +105,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         throw Exception('Location permission is required.');
       }
 
-      final position = await Geolocator.getCurrentPosition();
+      final position = await Geolocator.getCurrentPosition().timeout(
+        const Duration(seconds: 20),
+      );
       if (!communityProvider.isMalaysiaCoordinate(
         position.latitude,
         position.longitude,
@@ -96,7 +122,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           _longitude = communityProvider.userLongitude;
           _locationController.text = 'Segamat, Johor, Malaysia';
         });
-        _showSnack('GPS is outside Malaysia, using Segamat demo location.');
+        _showSnack('GPS is outside Malaysia, using Segamat fallback location.');
         return;
       }
 
@@ -125,7 +151,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     double longitude,
   ) async {
     try {
-      final placemarks = await placemarkFromCoordinates(latitude, longitude);
+      final placemarks = await placemarkFromCoordinates(
+        latitude,
+        longitude,
+      ).timeout(const Duration(seconds: 12));
       if (placemarks.isEmpty) return _coordinateLabel(latitude, longitude);
 
       final placemark = placemarks.first;
@@ -167,7 +196,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       final communityProvider = context.read<CommunityProvider>();
       final currentCity = weatherProvider.currentCity;
       final authorName = authProvider.userName ?? 'sk';
-      final authorId = authProvider.userEmail ?? authorName;
+      final authorId =
+          authProvider.userId ?? (throw StateError('Please log in again.'));
       final location = _locationController.text.trim().isNotEmpty
           ? _locationController.text.trim()
           : _latitude != null && _longitude != null
@@ -187,7 +217,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         authorName: widget.initialPost?.authorName ?? authorName,
         authorId: widget.initialPost?.authorId ?? authorId,
         timestamp: widget.initialPost?.timestamp ?? DateTime.now(),
-        imageUrl: _imageFile?.path ?? widget.initialPost?.imageUrl,
+        imageUrl: _imageRemoved
+            ? null
+            : _imageFile?.path ?? widget.initialPost?.imageUrl,
       );
 
       if (_isEditing) {
@@ -332,8 +364,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                               child: CircleAvatar(
                                 backgroundColor: Colors.black54,
                                 child: IconButton(
-                                  onPressed: () =>
-                                      setState(() => _imageFile = null),
+                                  tooltip: 'Remove photo',
+                                  onPressed: () => setState(() {
+                                    _imageFile = null;
+                                    _imageRemoved = true;
+                                  }),
                                   icon: const Icon(
                                     Icons.close,
                                     color: Colors.white,
@@ -389,19 +424,24 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           icon: const Icon(Icons.arrow_back),
         ),
         const SizedBox(width: 10),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _isEditing ? 'Edit Post' : 'Create Post',
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 2),
-            const Text(
-              'Share an air quality observation or hazard',
-              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-            ),
-          ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _isEditing ? 'Edit Post' : 'Create Post',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'Share an air quality observation or hazard',
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+              ),
+            ],
+          ),
         ),
       ],
     );

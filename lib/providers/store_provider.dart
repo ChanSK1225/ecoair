@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../data/local/ecoair_database.dart';
 import '../models/product.dart';
 
 class StoreProvider with ChangeNotifier {
@@ -11,14 +12,36 @@ class StoreProvider with ChangeNotifier {
   final List<Product> _products = [];
   final List<CartItem> _cart = [];
   final List<StoreOrder> _orders = [];
+  late final Future<void> ready;
+  Future<void> _pendingCartSave = Future.value();
+  bool _isPlacingOrder = false;
+  bool get isPlacingOrder => _isPlacingOrder;
+
+  bool _disposed = false;
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
 
   List<Product> get products => _products;
   List<CartItem> get cart => _cart;
   List<StoreOrder> get orders => List.unmodifiable(_orders);
 
-  StoreProvider() {
+  final EcoAirDatabase _database;
+  String? persistenceError;
+
+  StoreProvider({String? userId, bool initialize = true})
+    : _database = userId == null
+          ? EcoAirDatabase.instance
+          : EcoAirDatabase.forUser(userId) {
     _loadMockProducts();
-    _loadSavedStoreState();
+    ready = initialize ? _loadSavedStoreState() : Future.value();
   }
 
   void _loadMockProducts() {
@@ -31,10 +54,8 @@ class StoreProvider with ChangeNotifier {
             'Medical-grade N95 respirator mask with adjustable nose clip. Filters 95% of airborne particles including PM2.5. Perfect for daily use during haze season.',
         price: 29.90,
         category: 'N95 Masks',
-        imageUrl:
-            'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80&w=400',
+        imageUrl: 'assets/image/3mN95.jpeg',
         stock: 156,
-        rating: 4.8,
       ),
       Product(
         id: '2',
@@ -42,38 +63,40 @@ class StoreProvider with ChangeNotifier {
         description: 'High filtration efficiency KN95 masks in a pack of 50.',
         price: 45.00,
         category: 'Surgical Masks',
-        imageUrl:
-            'https://images.unsplash.com/photo-1586944229162-7b724c90c59e?auto=format&fit=crop&q=80&w=400',
+        imageUrl: 'assets/image/KN95.jpeg',
         stock: 200,
-        rating: 4.6,
-      ),
-      Product(
-        id: '3',
-        name: 'Xiaomi Air Purifier 4',
-        description: 'High-efficiency air purifier with HEPA filter.',
-        price: 599.00,
-        category: 'Air Purifiers',
-        imageUrl:
-            'https://images.unsplash.com/photo-1585771724684-252702b64431?auto=format&fit=crop&q=80&w=400',
-        stock: 45,
-        rating: 4.7,
-      ),
-      Product(
-        id: '4',
-        name: 'Sharp Plasmacluster',
-        description: 'Advanced air purifier with plasmacluster technology.',
-        price: 899.00,
-        category: 'Air Purifiers',
-        imageUrl:
-            'https://images.unsplash.com/photo-1591114163475-4927f8a7d0c7?auto=format&fit=crop&q=80&w=400',
-        stock: 12,
-        rating: 4.9,
       ),
     ]);
     notifyListeners();
   }
 
   Future<void> _loadSavedStoreState() async {
+    try {
+      final database = _database;
+      final savedCart = await database.loadCartItems(_products);
+      final savedOrders = await database.loadStoreOrders();
+      if (_database.userId != null ||
+          savedCart.isNotEmpty ||
+          savedOrders.isNotEmpty) {
+        _cart
+          ..clear()
+          ..addAll(savedCart);
+        _orders
+          ..clear()
+          ..addAll(savedOrders);
+        notifyListeners();
+        return;
+      }
+    } catch (e) {
+      persistenceError =
+          'Could not load your cart and orders. Restart to retry.';
+      if (_database.userId != null) {
+        notifyListeners();
+        return;
+      }
+      debugPrint('Store database cache ignored: $e');
+    }
+
     final prefs = await SharedPreferences.getInstance();
     _cart
       ..clear()
@@ -81,6 +104,8 @@ class StoreProvider with ChangeNotifier {
     _orders
       ..clear()
       ..addAll(_decodeOrders(prefs.getString(_ordersPrefsKey)));
+    if (_cart.isNotEmpty) await _saveCart();
+    if (_orders.isNotEmpty) await _saveOrders();
     notifyListeners();
   }
 
@@ -128,47 +153,68 @@ class StoreProvider with ChangeNotifier {
     return null;
   }
 
-  Future<void> _saveCart() async {
-    final prefs = await SharedPreferences.getInstance();
-    final encoded = jsonEncode(
-      _cart
-          .map(
-            (item) => {'productId': item.product.id, 'quantity': item.quantity},
-          )
-          .toList(),
-    );
-    await prefs.setString(_cartPrefsKey, encoded);
+  Future<void> _saveCart() {
+    final snapshot = _cart
+        .map((item) => CartItem(product: item.product, quantity: item.quantity))
+        .toList();
+    _pendingCartSave = _pendingCartSave
+        .then((_) async {
+          await _database.replaceCartItems(snapshot);
+          persistenceError = null;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove(_cartPrefsKey);
+        })
+        .catchError((Object e) {
+          persistenceError =
+              'Cart changes could not be saved. Please retry before checkout.';
+          notifyListeners();
+          debugPrint('Cart database save failed: $e');
+        });
+    return _pendingCartSave;
   }
 
   Future<void> _saveOrders() async {
+    try {
+      await _database.replaceStoreOrders(_orders);
+    } catch (e) {
+      debugPrint('Order database save failed: $e');
+    }
     final prefs = await SharedPreferences.getInstance();
-    final encoded = jsonEncode(_orders.map((order) => order.toJson()).toList());
-    await prefs.setString(_ordersPrefsKey, encoded);
+    await prefs.remove(_ordersPrefsKey);
   }
 
   void addToCart(Product product, {int quantity = 1}) {
+    if (_isPlacingOrder || quantity <= 0 || product.stock <= 0) return;
     final existingIndex = _cart.indexWhere(
       (item) => item.product.id == product.id,
     );
     if (existingIndex >= 0) {
-      _cart[existingIndex].quantity += quantity;
+      _cart[existingIndex].quantity = (_cart[existingIndex].quantity + quantity)
+          .clamp(1, product.stock);
     } else {
-      _cart.add(CartItem(product: product, quantity: quantity));
+      _cart.add(
+        CartItem(product: product, quantity: quantity.clamp(1, product.stock)),
+      );
     }
     _saveCart();
     notifyListeners();
   }
 
   void removeFromCart(String productId) {
+    if (_isPlacingOrder) return;
     _cart.removeWhere((item) => item.product.id == productId);
     _saveCart();
     notifyListeners();
   }
 
   void updateQuantity(String productId, int delta) {
+    if (_isPlacingOrder) return;
     final index = _cart.indexWhere((item) => item.product.id == productId);
     if (index >= 0) {
       _cart[index].quantity += delta;
+      if (_cart[index].quantity > _cart[index].product.stock) {
+        _cart[index].quantity = _cart[index].product.stock;
+      }
       if (_cart[index].quantity <= 0) {
         _cart.removeAt(index);
       }
@@ -181,39 +227,53 @@ class StoreProvider with ChangeNotifier {
 
   int get cartItemCount => _cart.fold(0, (sum, item) => sum + item.quantity);
 
-  StoreOrder? placeOrder({
+  Future<StoreOrder?> placeOrder({
     required String customerName,
     required String deliveryAddress,
     required String paymentMethod,
-  }) {
-    if (_cart.isEmpty) return null;
-
-    final order = StoreOrder(
-      id: 'EA-${DateTime.now().millisecondsSinceEpoch}',
-      items: _cart
-          .map(
-            (item) => OrderItem(
-              productId: item.product.id,
-              productName: item.product.name,
-              quantity: item.quantity,
-              unitPrice: item.product.price,
-            ),
-          )
-          .toList(),
-      total: cartTotal,
-      createdAt: DateTime.now(),
-      customerName: customerName,
-      deliveryAddress: deliveryAddress,
-      paymentMethod: paymentMethod,
-    );
-
-    _orders.insert(0, order);
-    _cart.clear();
-    _saveOrders();
-    _saveCart();
+  }) async {
+    if (_isPlacingOrder) return null;
+    _isPlacingOrder = true;
     notifyListeners();
-    return order;
+    try {
+      await ready;
+      await _pendingCartSave;
+      if (persistenceError != null) throw StateError(persistenceError!);
+      if (_cart.isEmpty) return null;
+      if (customerName.trim().isEmpty || deliveryAddress.trim().isEmpty) {
+        throw ArgumentError('Customer name and delivery address are required.');
+      }
+
+      final order = StoreOrder(
+        id: 'EA-${DateTime.now().millisecondsSinceEpoch}',
+        items: _cart
+            .map(
+              (item) => OrderItem(
+                productId: item.product.id,
+                productName: item.product.name,
+                quantity: item.quantity,
+                unitPrice: item.product.price,
+              ),
+            )
+            .toList(),
+        total: cartTotal,
+        createdAt: DateTime.now(),
+        customerName: customerName,
+        deliveryAddress: deliveryAddress,
+        paymentMethod: paymentMethod,
+      );
+
+      await _database.saveOrderAndClearCart(order);
+      _orders.insert(0, order);
+      _cart.clear();
+      return order;
+    } finally {
+      _isPlacingOrder = false;
+      notifyListeners();
+    }
   }
+
+  Future<void> retrySave() => _saveCart();
 
   void clearCart() {
     _cart.clear();

@@ -6,7 +6,6 @@ class Product {
   final String category;
   final String imageUrl;
   final int stock;
-  final double rating;
 
   Product({
     required this.id,
@@ -16,7 +15,6 @@ class Product {
     required this.category,
     required this.imageUrl,
     required this.stock,
-    required this.rating,
   });
 }
 

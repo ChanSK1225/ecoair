@@ -4,6 +4,7 @@ import '../../models/product.dart';
 import '../../providers/store_provider.dart';
 import '../../theme/ecoair_theme.dart';
 import '../../widgets/ecoair_ui.dart';
+import '../../widgets/product_visual.dart';
 import 'checkout_screen.dart';
 
 class CartScreen extends StatelessWidget {
@@ -26,72 +27,81 @@ class CartScreen extends StatelessWidget {
                 child: const Text('Go Shopping'),
               ),
             )
-          : Column(
-              children: [
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: storeProvider.cart.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      final item = storeProvider.cart[index];
-                      return _buildCartItem(context, item, storeProvider);
-                    },
-                  ),
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: storeProvider.cart.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 16),
+              itemBuilder: (context, index) {
+                final item = storeProvider.cart[index];
+                return _buildCartItem(context, item, storeProvider);
+              },
+            ),
+      bottomNavigationBar: storeProvider.cart.isEmpty
+          ? null
+          : SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                 ),
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(24),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Total Amount',
-                            style: TextStyle(fontSize: 16, color: Colors.grey),
-                          ),
-                          Text(
-                            'RM ${storeProvider.cartTotal.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: EcoAirColors.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const CheckoutScreen(),
-                            ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          minimumSize: const Size(double.infinity, 54),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (storeProvider.persistenceError case final String error)
+                      EcoAirInlineMessage(
+                        icon: Icons.storage,
+                        title: 'Cart not saved',
+                        message: error,
+                        color: Colors.red,
+                        action: TextButton(
+                          onPressed: storeProvider.retrySave,
+                          child: const Text('Retry'),
                         ),
-                        child: const Text(
-                          'Proceed to Checkout',
-                          style: TextStyle(
+                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Total Amount',
+                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                        ),
+                        Text(
+                          'RM ${storeProvider.cartTotal.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                            color: EcoAirColors.primary,
                           ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CheckoutScreen(),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 54),
                       ),
-                    ],
-                  ),
+                      child: const Text(
+                        'Proceed to Checkout',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
     );
   }
@@ -107,21 +117,11 @@ class CartScreen extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              item.product.imageUrl,
+            child: EcoAirProductVisual(
+              product: item.product,
               width: 80,
               height: 80,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                width: 80,
-                height: 80,
-                color: EcoAirColors.mint,
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.inventory_2_outlined,
-                  color: EcoAirColors.primary,
-                ),
-              ),
+              compact: true,
             ),
           ),
           const SizedBox(width: 16),

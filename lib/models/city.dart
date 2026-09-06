@@ -90,9 +90,8 @@ class City {
   Color get aqiColor {
     if (aqi <= 50) return Colors.green;
     if (aqi <= 100) return Colors.yellow[700]!;
-    if (aqi <= 150) return Colors.orange;
-    if (aqi <= 200) return Colors.red;
-    if (aqi <= 300) return Colors.purple;
-    return Colors.brown;
+    if (aqi <= 200) return Colors.orange;
+    if (aqi <= 300) return Colors.red;
+    return Colors.purple;
   }
 }
