@@ -40,7 +40,7 @@ void main() {
     await old.close();
     final upgraded = EcoAirDatabase.atPath(file);
     final user = await upgraded.userById('existing');
-    expect((await upgraded.database).getVersion(), completion(5));
+    expect((await upgraded.database).getVersion(), completion(6));
     expect(user!['password_hash'], 'unchanged-hash');
     expect(user['recovery_hash'], isNull);
     expect(await upgraded.getSetting('auth.userId'), 'existing');
@@ -114,7 +114,7 @@ void main() {
       await old.close();
       final upgraded = EcoAirDatabase.atPath(file);
       final db = await upgraded.database;
-      expect(await db.getVersion(), 5);
+      expect(await db.getVersion(), 6);
       expect((await upgraded.loadFavoriteCities()).single.name, 'Segamat');
       expect(
         (await upgraded.loadStoreOrders()).single.items.single.quantity,

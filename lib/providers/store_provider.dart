@@ -40,13 +40,13 @@ class StoreProvider with ChangeNotifier {
     : _database = userId == null
           ? EcoAirDatabase.instance
           : EcoAirDatabase.forUser(userId) {
-    _loadMockProducts();
+    _products.clear();
+    _products.addAll(_defaultProducts());
     ready = initialize ? _loadSavedStoreState() : Future.value();
   }
 
-  void _loadMockProducts() {
-    _products.clear();
-    _products.addAll([
+  List<Product> _defaultProducts() {
+    return [
       Product(
         id: '1',
         name: '3M N95 Respirator',
@@ -55,7 +55,7 @@ class StoreProvider with ChangeNotifier {
         price: 29.90,
         category: 'N95 Masks',
         imageUrl: 'assets/image/3mN95.jpeg',
-        stock: 156,
+        stock: 200,
       ),
       Product(
         id: '2',
@@ -66,27 +66,27 @@ class StoreProvider with ChangeNotifier {
         imageUrl: 'assets/image/KN95.jpeg',
         stock: 200,
       ),
-    ]);
-    notifyListeners();
+    ];
   }
 
   Future<void> _loadSavedStoreState() async {
     try {
       final database = _database;
+      final loadedProducts = await database.loadProducts(_defaultProducts());
+      _products
+        ..clear()
+        ..addAll(loadedProducts);
+
       final savedCart = await database.loadCartItems(_products);
       final savedOrders = await database.loadStoreOrders();
-      if (_database.userId != null ||
-          savedCart.isNotEmpty ||
-          savedOrders.isNotEmpty) {
-        _cart
-          ..clear()
-          ..addAll(savedCart);
-        _orders
-          ..clear()
-          ..addAll(savedOrders);
-        notifyListeners();
-        return;
-      }
+      _cart
+        ..clear()
+        ..addAll(savedCart);
+      _orders
+        ..clear()
+        ..addAll(savedOrders);
+      notifyListeners();
+      return;
     } catch (e) {
       persistenceError =
           'Could not load your cart and orders. Restart to retry.';
@@ -264,6 +264,21 @@ class StoreProvider with ChangeNotifier {
       );
 
       await _database.saveOrderAndClearCart(order);
+      for (final item in order.items) {
+        final index = _products.indexWhere((p) => p.id == item.productId);
+        if (index >= 0) {
+          final p = _products[index];
+          _products[index] = Product(
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            price: p.price,
+            category: p.category,
+            imageUrl: p.imageUrl,
+            stock: (p.stock - item.quantity).clamp(0, 999999),
+          );
+        }
+      }
       _orders.insert(0, order);
       _cart.clear();
       return order;

@@ -31,6 +31,7 @@ class EcoAirDatabase {
   static const tableWeatherForecasts = 'cached_weather_forecasts';
   static const tableSettings = 'app_settings';
   static const tablePasswordResetOtps = 'password_reset_otps';
+  static const tableProducts = 'store_products';
 
   Database? _database;
   Future<Database>? _opening;
@@ -53,7 +54,7 @@ class EcoAirDatabase {
     final filePath = _filePath ?? path.join(databasePath, 'ecoair.db');
     _database = await openDatabase(
       filePath,
-      version: 5,
+      version: 6,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -63,6 +64,7 @@ class EcoAirDatabase {
         if (oldVersion < 3) await _createAccounts(db);
         if (oldVersion < 4) await _createRecovery(db);
         if (oldVersion < 5) await _createPasswordResetOtps(db);
+        if (oldVersion < 6) await _createProductsTable(db);
       },
     );
     return _database!;
@@ -182,6 +184,17 @@ class EcoAirDatabase {
       CREATE TABLE $tableSettings (
         key TEXT PRIMARY KEY,
         value TEXT
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE $tableProducts (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        price REAL NOT NULL,
+        category TEXT NOT NULL,
+        image_url TEXT NOT NULL,
+        stock INTEGER NOT NULL DEFAULT 200
       )
     ''');
     await _createLikesTable(db);
@@ -553,8 +566,8 @@ class EcoAirDatabase {
         location: 'Kuala Lumpur, W.P. Kuala Lumpur',
         latitude: 3.139,
         longitude: 101.6869,
-        aqiAtTime: 72,
-        aqiStatus: 'Moderate',
+        aqiAtTime: 158,
+        aqiStatus: 'Unhealthy',
         likes: 3,
         authorName: 'Farah',
         authorId: 'community-kl',
@@ -567,8 +580,8 @@ class EcoAirDatabase {
         location: 'George Town, Penang',
         latitude: 5.4141,
         longitude: 100.3288,
-        aqiAtTime: 45,
-        aqiStatus: 'Good',
+        aqiAtTime: 97,
+        aqiStatus: 'Moderate',
         likes: 5,
         authorName: 'Mei Ling',
         authorId: 'community-penang',
@@ -581,8 +594,8 @@ class EcoAirDatabase {
         location: 'Kuching, Sarawak',
         latitude: 1.5533,
         longitude: 110.3592,
-        aqiAtTime: 68,
-        aqiStatus: 'Moderate',
+        aqiAtTime: 200,
+        aqiStatus: 'Unhealthy',
         likes: 2,
         authorName: 'Aiman',
         authorId: 'community-kuching',
@@ -595,8 +608,8 @@ class EcoAirDatabase {
         location: 'Pasir Gudang, Johor',
         latitude: 1.4709,
         longitude: 103.902,
-        aqiAtTime: 112,
-        aqiStatus: 'Unhealthy',
+        aqiAtTime: 85,
+        aqiStatus: 'Moderate',
         likes: 8,
         authorName: 'Ravi',
         authorId: 'community-pasir-gudang',
@@ -905,12 +918,67 @@ class EcoAirDatabase {
     });
   }
 
+  Future<void> _createProductsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $tableProducts (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        price REAL NOT NULL,
+        category TEXT NOT NULL,
+        image_url TEXT NOT NULL,
+        stock INTEGER NOT NULL DEFAULT 200
+      )
+    ''');
+  }
+
+  Future<List<Product>> loadProducts(List<Product> defaultProducts) async {
+    final db = await database;
+    final rows = await db.query(tableProducts, orderBy: 'id ASC');
+    if (rows.isEmpty) {
+      await replaceProducts(defaultProducts);
+      return defaultProducts;
+    }
+    return rows.map((row) {
+      return Product(
+        id: '${row['id']}',
+        name: '${row['name']}',
+        description: '${row['description']}',
+        price: (row['price'] as num?)?.toDouble() ?? 0.0,
+        category: '${row['category']}',
+        imageUrl: '${row['image_url']}',
+        stock: (row['stock'] as num?)?.toInt() ?? 200,
+      );
+    }).toList();
+  }
+
+  Future<void> replaceProducts(List<Product> products) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      for (final p in products) {
+        await txn.insert(tableProducts, {
+          'id': p.id,
+          'name': p.name,
+          'description': p.description,
+          'price': p.price,
+          'category': p.category,
+          'image_url': p.imageUrl,
+          'stock': p.stock,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
+  }
+
   Future<void> saveOrderAndClearCart(StoreOrder order) async {
     final db = await database;
     await db.transaction((txn) async {
       await txn.insert(tableOrders, _orderToRow(order));
       for (final item in order.items) {
         await txn.insert(tableOrderItems, _orderItemToRow(order.id, item));
+        await txn.rawUpdate(
+          'UPDATE $tableProducts SET stock = MAX(0, stock - ?) WHERE id = ?',
+          [item.quantity, item.productId],
+        );
       }
       await txn.delete(
         tableCartItems,

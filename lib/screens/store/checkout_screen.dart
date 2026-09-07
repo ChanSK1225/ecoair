@@ -245,7 +245,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       icon: const Icon(Icons.payment),
                       label: Text(
                         _paymentMethod == 'Online Banking'
-                            ? 'Pay with Stripe Demo'
+                            ? 'Pay with Stripe RM ${storeProvider.cartTotal.toStringAsFixed(2)}'
                             : 'Pay RM ${storeProvider.cartTotal.toStringAsFixed(2)}',
                       ),
                       style: ElevatedButton.styleFrom(
